@@ -3,8 +3,8 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider = "sqlite"
+  url      = "file:./dev.db"
 }
 
 model User {
@@ -23,10 +23,9 @@ model Workflow {
   name        String
   description String?
   
-  // React Flow data stored as JSON
-  nodes       Json     @default("[]")
-  edges       Json     @default("[]")
-  viewport    Json?
+  nodes       String   @default("[]")
+  edges       String   @default("[]")
+  viewport    String?
   
   userId      String
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -48,32 +47,20 @@ model WorkflowRun {
   userId      String
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   
-  status      RunStatus @default(RUNNING)
-  scope       RunScope  @default(FULL)
+  status      String   @default("RUNNING")
+  scope       String   @default("FULL")
   
-  // Execution details stored as JSON
-  nodeResults Json      @default("[]")
+  nodeResults String   @default("[]")
   
   startedAt   DateTime  @default(now())
   completedAt DateTime?
-  duration    Int?      // in milliseconds
-  
+  duration    Int?
   error       String?
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
   
   @@index([workflowId])
   @@index([userId])
   @@index([startedAt])
-}
-
-enum RunStatus {
-  RUNNING
-  SUCCESS
-  FAILED
-  PARTIAL
-}
-
-enum RunScope {
-  FULL
-  PARTIAL
-  SINGLE
 }

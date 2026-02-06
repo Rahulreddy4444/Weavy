@@ -1,236 +1,321 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getAuth } from '@clerk/nextjs/server';
+import { auth } from '@clerk/nextjs/server';
 import { prisma } from '@/lib/prisma';
-import { WorkflowEngine } from '@/lib/workflow-engine';
-import { tasks } from '@trigger.dev/sdk/v3';
-// In app/api/workflows/[id]/run/route.ts
-import { runLLM } from '@/trigger/llm-task';
-import { cropImage } from '@/trigger/crop-image-task';
-import { extractFrame } from '@/trigger/extract-frame-task';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 
-// Later in the executeWorkflow function:
+// const genAI = new GoogleGenerativeAI(process.env.GOOGLE_GEMINI_API_KEY || '');
+const genAI = new GoogleGenerativeAI(process.env.GOOGLE_GEMINI_API_KEY || '');
 
-// POST /api/workflows/[id]/run - Execute workflow
+
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { userId } = getAuth(request);
-    
-    if (!userId) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const { userId: clerkUserId } = await auth();
+    if (!clerkUserId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
+    const { id } = await params;
     const body = await request.json();
-    const { selectedNodes, scope = 'FULL' } = body;
+    const { scope = 'FULL' } = body;
 
-    // Fetch workflow
+    const user = await prisma.user.findUnique({ where: { clerkId: clerkUserId } });
+    if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 });
+
     const workflow = await prisma.workflow.findFirst({
-      where: {
-        id: params.id,
-        userId,
-      },
+      where: { id, userId: user.id },
     });
 
-    if (!workflow) {
-      return NextResponse.json({ error: 'Workflow not found' }, { status: 404 });
-    }
+    if (!workflow) return NextResponse.json({ error: 'Workflow not found' }, { status: 404 });
 
-    const nodes = workflow.nodes as any[];
-    const edges = workflow.edges as any[];
+    const nodes = JSON.parse(workflow.nodes as string);
+    const edges = JSON.parse(workflow.edges as string);
 
-    // Determine which nodes to execute
-    let nodesToExecute = nodes;
-    if (scope === 'PARTIAL' && selectedNodes) {
-      nodesToExecute = nodes.filter(n => selectedNodes.includes(n.id));
-    } else if (scope === 'SINGLE' && selectedNodes && selectedNodes.length > 0) {
-      nodesToExecute = nodes.filter(n => n.id === selectedNodes[0]);
-    }
-
-    // Create workflow run
     const workflowRun = await prisma.workflowRun.create({
       data: {
         workflowId: workflow.id,
-        userId,
+        userId: user.id,
         status: 'RUNNING',
         scope,
+        nodeResults: JSON.stringify([]),
       },
     });
 
-    // Execute workflow in background
-    executeWorkflow(workflowRun.id, nodesToExecute, edges);
+    // Background execution
+    executeWorkflow(workflowRun.id, nodes, edges).catch(console.error);
 
-    return NextResponse.json({
-      runId: workflowRun.id,
-      status: 'RUNNING',
-    });
+    return NextResponse.json({ runId: workflowRun.id, status: 'RUNNING' });
   } catch (error) {
     console.error('Workflow execution error:', error);
-    return NextResponse.json(
-      { error: 'Execution failed' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Execution failed' }, { status: 500 });
   }
 }
 
 async function executeWorkflow(runId: string, nodes: any[], edges: any[]) {
+  const nodeResults: any[] = [];
   const startTime = Date.now();
-  
+
   try {
-    const engine = new WorkflowEngine(nodes, edges);
+    // Note: In a production app, you should sort 'nodes' by dependency (Topological Sort)
+    for (const node of nodes) {
+      const nodeStartTime = Date.now();
+      try {
+        let output: any = {};
 
-    // Validate DAG
-    const validation = engine.validateDAG();
-    if (!validation.valid) {
-      await prisma.workflowRun.update({
-        where: { id: runId },
-        data: {
-          status: 'FAILED',
-          error: validation.error,
-          completedAt: new Date(),
-          duration: Date.now() - startTime,
-        },
-      });
-      return;
-    }
+        switch (node.type) {
+          case 'textNode':
+            output = { text: node.data.text || '' };
+            break;
 
-    // Get parallel batches
-    const batches = engine.getParallelBatches();
-    const nodeResults: any[] = [];
+          case 'llmNode': {
+          const incomingEdges = edges.filter(e => e.target === node.id);
+          const incomingTexts: string[] = [];
 
-    // Execute batches sequentially, nodes in each batch in parallel
-    for (const batch of batches) {
-      const promises = batch.map(async (nodeId) => {
-        const node = engine.getNode(nodeId);
-        if (!node) return null;
-
-        const nodeStartTime = Date.now();
-        
-        try {
-          // Get inputs from connected nodes
-          const inputs = engine.getNodeInputs(nodeId);
-
-          let result;
-          
-          // Execute based on node type
-          switch (node.type) {
-            case 'textNode':
-              result = { output: node.data.text };
-              break;
-
-            case 'uploadImageNode':
-              result = { output: node.data.imageUrl };
-              break;
-
-            case 'uploadVideoNode':
-              result = { output: node.data.videoUrl };
-              break;
-
-            // case 'llmNode':
-            //   // Trigger LLM task
-            //   result = await tasks.trigger('run-llm', {
-            //     model: node.data.model || 'gemini-pro',
-            //     systemPrompt: inputs.system_prompt?.output || node.data.systemPrompt,
-            //     userMessage: inputs.user_message?.output || node.data.userMessage,
-            //     images: inputs.images ? [inputs.images.output] : undefined,
-            //   });
-            //   break;
-
-            // case 'cropImageNode':
-            //   result = await tasks.trigger('crop-image', {
-            //     imageUrl: inputs.image_url?.output || node.data.imageUrl,
-            //     xPercent: node.data.xPercent || 0,
-            //     yPercent: node.data.yPercent || 0,
-            //     widthPercent: node.data.widthPercent || 100,
-            //     heightPercent: node.data.heightPercent || 100,
-            //   });
-            //   break;
-
-            // case 'extractFrameNode':
-            //   result = await tasks.trigger('extract-frame', {
-            //     videoUrl: inputs.video_url?.output || node.data.videoUrl,
-            //     timestamp: node.data.timestamp || '0',
-            //   });
-            //   break;
-
-            case 'llmNode':
-              result = await runLLM.trigger({  // ✅ NEW WAY
-                model: node.data.model || 'gemini-pro',
-                systemPrompt: inputs.system_prompt?.output || node.data.systemPrompt,
-                userMessage: inputs.user_message?.output || node.data.userMessage,
-                images: inputs.images ? [inputs.images.output] : undefined,
-              });
-              break;
-
-            case 'cropImageNode':
-              result = await cropImage.trigger({  // ✅ NEW WAY
-                imageUrl: inputs.image_url?.output || node.data.imageUrl,
-                xPercent: node.data.xPercent || 0,
-                yPercent: node.data.yPercent || 0,
-                widthPercent: node.data.widthPercent || 100,
-                heightPercent: node.data.heightPercent || 100,
-              });
-              break;
-
-            case 'extractFrameNode':
-              result = await extractFrame.trigger({  // ✅ NEW WAY
-                videoUrl: inputs.video_url?.output || node.data.videoUrl,
-                timestamp: node.data.timestamp || '0',
-              });
-              break;
-
-            default:
-              result = { output: null };
+          // 1. Collect text from all connected nodes (e.g., your two Text Nodes)
+          for (const edge of incomingEdges) {
+            const prevResult = nodeResults.find(r => r.nodeId === edge.source);
+            if (prevResult && prevResult.status === 'success') {
+              const text = prevResult.output.text || prevResult.output.response || '';
+              incomingTexts.push(text);
+            }
           }
 
-          engine.setNodeResult(nodeId, result);
+          // 2. Merge the texts into one message
+          const mergedMessage = incomingTexts.join('\n') || node.data.userMessage || "No input provided";
 
-          nodeResults.push({
-            nodeId,
-            status: 'success',
-            output: result,
-            duration: Date.now() - nodeStartTime,
-            timestamp: new Date(),
+          // 3. Use a confirmed working model (Gemini 1.5 Flash or 2.5 Flash)
+          const model = genAI.getGenerativeModel({ 
+            model: node.data.model || 'gemini-1.5-flash',
+            systemInstruction: node.data.systemPrompt // Use the prompt you wrote in the UI
           });
 
-          return result;
-        } catch (error: any) {
-          nodeResults.push({
-            nodeId,
-            status: 'failed',
-            error: error.message,
-            duration: Date.now() - nodeStartTime,
-            timestamp: new Date(),
-          });
-
-          throw error;
+          const result = await model.generateContent(mergedMessage);
+          const response = await result.response;
+          output = { response: response.text() };
+          break;
         }
-      });
 
-      await Promise.all(promises);
+          default:
+            output = node.data || {};
+        }
+
+        nodeResults.push({
+          nodeId: node.id,
+          nodeType: node.type,
+          status: 'success',
+          output,
+          duration: Date.now() - nodeStartTime,
+          timestamp: new Date().toISOString(),
+        });
+
+      } catch (error: any) {
+        nodeResults.push({
+          nodeId: node.id,
+          nodeType: node.type,
+          status: 'failed',
+          error: error.message,
+          duration: Date.now() - nodeStartTime,
+        });
+      }
     }
 
-    // Update workflow run as successful
     await prisma.workflowRun.update({
       where: { id: runId },
       data: {
         status: 'SUCCESS',
-        nodeResults,
         completedAt: new Date(),
         duration: Date.now() - startTime,
+        nodeResults: JSON.stringify(nodeResults),
       },
     });
   } catch (error: any) {
-    // Update as failed
     await prisma.workflowRun.update({
       where: { id: runId },
-      data: {
-        status: 'FAILED',
-        error: error.message,
-        completedAt: new Date(),
-        duration: Date.now() - startTime,
-      },
+      data: { status: 'FAILED', error: error.message, nodeResults: JSON.stringify(nodeResults) },
     });
   }
 }
+
+
+
+
+
+// import { NextRequest, NextResponse } from 'next/server';
+// import { auth } from '@clerk/nextjs/server';
+// import { prisma } from '@/lib/prisma';
+// import { GoogleGenerativeAI } from '@google/generative-ai';
+
+// const genAI = new GoogleGenerativeAI(process.env.GOOGLE_GEMINI_API_KEY || '');
+
+// export async function POST(
+//   request: NextRequest,
+//   { params }: { params: Promise<{ id: string }> }
+// ) {
+//   try {
+//     const { userId: clerkUserId } = await auth();
+//     if (!clerkUserId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+//     const { id } = await params;
+//     const body = await request.json();
+//     const { scope = 'FULL' } = body;
+
+//     const user = await prisma.user.findUnique({ where: { clerkId: clerkUserId } });
+//     if (!user) return NextResponse.json({ error: 'User not found' }, { status: 404 });
+
+//     const workflow = await prisma.workflow.findFirst({
+//       where: { id, userId: user.id },
+//     });
+
+//     if (!workflow) return NextResponse.json({ error: 'Workflow not found' }, { status: 404 });
+
+//     const nodes = JSON.parse(workflow.nodes as string);
+//     const edges = JSON.parse(workflow.edges as string);
+
+//     const workflowRun = await prisma.workflowRun.create({
+//       data: {
+//         workflowId: workflow.id,
+//         userId: user.id,
+//         status: 'RUNNING',
+//         scope,
+//         nodeResults: JSON.stringify([]),
+//       },
+//     });
+
+//     // Background execution
+//     executeWorkflow(workflowRun.id, nodes, edges).catch(console.error);
+
+//     return NextResponse.json({ runId: workflowRun.id, status: 'RUNNING' });
+//   } catch (error) {
+//     console.error('Workflow execution error:', error);
+//     return NextResponse.json({ error: 'Execution failed' }, { status: 500 });
+//   }
+// }
+
+// async function executeWorkflow(runId: string, nodes: any[], edges: any[]) {
+//   const nodeResults: any[] = [];
+//   const startTime = Date.now();
+
+//   try {
+//     for (const node of nodes) {
+//       const nodeStartTime = Date.now();
+//       try {
+//         let output: any = {};
+
+//         switch (node.type) {
+//           case 'textNode':
+//             output = { text: node.data.text || '' };
+//             break;
+
+//           case 'llmNode': {
+//             // ✅ Get inputs from connected nodes
+//             const incomingEdges = edges.filter(e => e.target === node.id);
+//             let systemPrompt = node.data.systemPrompt || '';
+//             let userMessage = node.data.userMessage || '';
+            
+//             // ✅ Map inputs from previous node results
+//             for (const edge of incomingEdges) {
+//               const prevResult = nodeResults.find(r => r.nodeId === edge.source);
+//               if (prevResult && prevResult.status === 'success') {
+//                 const incomingText = prevResult.output.text || prevResult.output.response || '';
+                
+//                 if (edge.targetHandle === 'system_prompt') {
+//                   systemPrompt = incomingText;
+//                 } else if (edge.targetHandle === 'user_message') {
+//                   userMessage = incomingText;
+//                 }
+//               }
+//             }
+
+//             // Check API key
+//             if (!process.env.GOOGLE_GEMINI_API_KEY) {
+//               output = { response: 'Error: GOOGLE_GEMINI_API_KEY not set in .env.local' };
+//               break;
+//             }
+
+//             // ✅ Use gemini-pro (most stable)
+//             const modelId = node.data.model || 'gemini-2.5-flash';
+            
+//             const model = genAI.getGenerativeModel({ 
+//               model: modelId 
+//             });
+
+//             // Build prompt
+//             const parts: string[] = [];
+//             if (systemPrompt) {
+//               parts.push(`System: ${systemPrompt}\n\n`);
+//             }
+//             if (userMessage) {
+//               parts.push(userMessage);
+//             } else {
+//               parts.push('Hello');
+//             }
+
+//             const result = await model.generateContent(parts.join(''));
+//             const response = await result.response;
+//             output = { response: response.text() };
+//             break;
+//           }
+
+//           case 'uploadImageNode':
+//             output = { imageUrl: node.data.imageUrl || '' };
+//             break;
+
+//           case 'uploadVideoNode':
+//             output = { videoUrl: node.data.videoUrl || '' };
+//             break;
+
+//           case 'cropImageNode':
+//             output = { croppedUrl: 'https://placehold.co/400x400/png?text=Cropped' };
+//             break;
+
+//           case 'extractFrameNode':
+//             output = { extractedFrameUrl: 'https://placehold.co/400x400/png?text=Frame' };
+//             break;
+
+//           default:
+//             output = node.data || {};
+//         }
+
+//         nodeResults.push({
+//           nodeId: node.id,
+//           nodeType: node.type,
+//           status: 'success',
+//           output,
+//           duration: Date.now() - nodeStartTime,
+//           timestamp: new Date().toISOString(),
+//         });
+
+//       } catch (error: any) {
+//         nodeResults.push({
+//           nodeId: node.id,
+//           nodeType: node.type,
+//           status: 'failed',
+//           error: error.message,
+//           duration: Date.now() - nodeStartTime,
+//           timestamp: new Date().toISOString(),
+//         });
+//       }
+//     }
+
+//     await prisma.workflowRun.update({
+//       where: { id: runId },
+//       data: {
+//         status: 'SUCCESS',
+//         completedAt: new Date(),
+//         duration: Date.now() - startTime,
+//         nodeResults: JSON.stringify(nodeResults),
+//       },
+//     });
+//   } catch (error: any) {
+//     await prisma.workflowRun.update({
+//       where: { id: runId },
+//       data: { 
+//         status: 'FAILED', 
+//         completedAt: new Date(),
+//         duration: Date.now() - startTime,
+//         error: error.message, 
+//         nodeResults: JSON.stringify(nodeResults) 
+//       },
+//     });
+//   }
+// }

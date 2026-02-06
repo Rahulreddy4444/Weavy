@@ -116,7 +116,13 @@ export async function GET(request: NextRequest) {
       },
     });
 
-    return NextResponse.json({ workflows });
+    const formattedWorkflows = workflows.map((w) => ({
+      ...w,
+      nodes: JSON.parse(w.nodes as string),
+      edges: JSON.parse(w.edges as string),
+    }));
+
+    return NextResponse.json({ workflows: formattedWorkflows });
   } catch (error) {
     console.error('Error fetching workflows:', error);
     return NextResponse.json(
@@ -144,6 +150,8 @@ export async function POST(request: NextRequest) {
     const workflow = await prisma.workflow.create({
       data: {
         ...validated,
+        nodes: JSON.stringify(validated.nodes ?? []),
+        edges: JSON.stringify(validated.edges ?? []),
         userId: user.id, // Use the database user ID, not Clerk ID
       },
     });

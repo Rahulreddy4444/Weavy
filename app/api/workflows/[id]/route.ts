@@ -186,7 +186,13 @@ export async function GET(
       return NextResponse.json({ error: 'Workflow not found' }, { status: 404 });
     }
 
-    return NextResponse.json({ workflow });
+    const formattedWorkflow = {
+      ...workflow,
+      nodes: JSON.parse(workflow.nodes as string),
+      edges: JSON.parse(workflow.edges as string),
+    };
+
+    return NextResponse.json({ workflow: formattedWorkflow });
   } catch (error) {
     console.error('Error fetching workflow:', error);
     return NextResponse.json(
@@ -221,12 +227,16 @@ export async function PATCH(
     const body = await request.json();
     const validated = updateSchema.parse(body);
 
+    const dataToUpdate: any = { ...validated };
+    if (validated.nodes !== undefined) dataToUpdate.nodes = JSON.stringify(validated.nodes);
+    if (validated.edges !== undefined) dataToUpdate.edges = JSON.stringify(validated.edges);
+
     const workflow = await prisma.workflow.updateMany({
       where: {
         id,
         userId: user.id,
       },
-      data: validated,
+      data: dataToUpdate,
     });
 
     if (workflow.count === 0) {
