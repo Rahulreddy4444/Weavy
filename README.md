@@ -407,7 +407,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 [Watch Demo Video](https://drive.google.com/file/d/1s4AGMLcCiUD-9L0Z0Uy4xqEH2_JBd91H/view?usp=drive_link)
 
-[Livee Demo URL](https://drive.google.com/file/d/1s4AGMLcCiUD-9L0Z0Uy4xqEH2_JBd91H/view?usp=drive_link)
+[Live Demo URL](https://drive.google.com/file/d/1s4AGMLcCiUD-9L0Z0Uy4xqEH2_JBd91H/view?usp=drive_link)
 
 
 
