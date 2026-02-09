@@ -1,4 +1,6 @@
 import { UserButton } from '@clerk/nextjs';
+import Link from 'next/link';
+import { Workflow } from 'lucide-react';
 
 export default function DashboardLayout({
   children,
@@ -6,49 +8,21 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   return (
-    <div className="min-h-screen">
-      <nav className="border-b border-gray-200 bg-white">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between h-16">
-            <div className="flex items-center">
-              <h1 className="text-xl font-bold">Weavy Clone</h1>
-            </div>
-            <div className="flex items-center">
-              <UserButton afterSignOutUrl="/" />
-            </div>
-          </div>
+    <div className="min-h-screen bg-background">
+      {/* Header with dark theme */}
+      <header className="sticky top-0 z-50 border-b border-border bg-card">
+        <div className="container mx-auto flex h-16 items-center px-4">
+          <Link href="/workflows" className="flex items-center gap-2">
+            <Workflow className="h-6 w-6 text-primary" />
+            <span className="text-xl font-bold text-foreground">Weavy Clone</span>
+          </Link>
+          <div className="flex-1" />
+          <UserButton afterSignOutUrl="/" />
         </div>
-      </nav>
-      {children}
+      </header>
+
+      {/* Main content */}
+      <main>{children}</main>
     </div>
   );
 }
-
-
-
-
-// import { UserButton } from '@clerk/nextjs';
-
-// export default function DashboardLayout({
-//   children,
-// }: {
-//   children: React.ReactNode;
-// }) {
-//   return (
-//     <div className="min-h-screen">
-//       <nav className="border-b bg-white">
-//         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-//           <div className="flex justify-between h-16">
-//             <div className="flex items-center">
-//               <h1 className="text-xl font-bold">Weavy Clone</h1>
-//             </div>
-//             <div className="flex items-center">
-//               <UserButton />
-//             </div>
-//           </div>
-//         </div>
-//       </nav>
-//       {children}
-//     </div>
-//   );
-// }
