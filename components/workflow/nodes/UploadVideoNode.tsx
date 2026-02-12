@@ -1,5 +1,4 @@
 'use client';
-
 import { memo, useCallback, useState } from 'react';
 import { NodeProps } from 'reactflow';
 import { Video, Upload, X, Play } from 'lucide-react';
@@ -29,7 +28,7 @@ export default memo(function UploadVideoNode({ id, data }: NodeProps) {
       }
 
       setUploading(true);
-      
+
       try {
         const formData = new FormData();
         formData.append('file', file);
@@ -42,13 +41,13 @@ export default memo(function UploadVideoNode({ id, data }: NodeProps) {
         if (!response.ok) throw new Error('Upload failed');
 
         const { url } = await response.json();
-        
+
         updateNodeData(id, {
           videoUrl: url,
           fileName: file.name,
           fileSize: file.size,
         });
-        
+
         toast.success('Video uploaded successfully');
       } catch (error) {
         toast.error('Failed to upload video');
@@ -75,11 +74,13 @@ export default memo(function UploadVideoNode({ id, data }: NodeProps) {
 
   return (
     <BaseNode
-      title="Upload Video"
-      icon={<Video className="w-4 h-4" />}
+      title={data.label || 'Upload Video'}
+      label={data.label}
+      icon={<Video className="w-4 h-4 text-emerald-400" />}
       outputs={[{ id: 'output', label: 'Video' }]}
       isRunning={data.isRunning || uploading}
-      headerColor="from-amber-500/20 to-orange-500/20"
+      isSuccess={data.videoUrl}
+      nodeType="input"
     >
       <div className="space-y-3">
         {!data.videoUrl ? (
@@ -92,15 +93,15 @@ export default memo(function UploadVideoNode({ id, data }: NodeProps) {
               id={`file-input-${id}`}
               disabled={uploading}
             />
-            
+
             <label htmlFor={`file-input-${id}`}>
               <div className="cursor-pointer group">
-                <div className="border-2 border-dashed border-border rounded-lg p-8 hover:border-primary/50 hover:bg-primary/5 transition-all text-center">
-                  <Upload className="w-8 h-8 mx-auto mb-3 text-muted-foreground group-hover:text-primary transition-colors" />
-                  <p className="text-sm font-medium text-foreground mb-1">
+                <div className="border-2 border-dashed border-[#1e293b] rounded-lg p-6 hover:border-emerald-500/50 hover:bg-emerald-500/5 transition-all text-center">
+                  <Upload className="w-8 h-8 mx-auto mb-3 text-gray-500 group-hover:text-emerald-400 transition-colors" />
+                  <p className="text-sm font-medium text-gray-300 mb-1">
                     {uploading ? 'Uploading...' : 'Click to upload'}
                   </p>
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-xs text-gray-500">
                     MP4, MOV, WebM, M4V (max 100MB)
                   </p>
                 </div>
@@ -109,26 +110,21 @@ export default memo(function UploadVideoNode({ id, data }: NodeProps) {
           </>
         ) : (
           <div className="space-y-2">
-            <div className="node-image-preview rounded-lg overflow-hidden border border-border bg-black">
-              <div className="relative group">
-                <video
-                  src={data.videoUrl}
-                  className="w-full h-48 object-cover"
-                  controls
-                />
-                <div className="absolute inset-0 flex items-center justify-center pointer-events-none group-hover:bg-black/20 transition-colors">
-                  <Play className="w-12 h-12 text-white/80 opacity-0 group-hover:opacity-100 transition-opacity" />
-                </div>
-              </div>
+            <div className="rounded-lg overflow-hidden border border-[#1e293b] bg-black">
+              <video
+                src={data.videoUrl}
+                className="w-full h-40 object-cover"
+                controls
+              />
             </div>
 
-            <div className="flex items-center justify-between px-2 py-1.5 bg-secondary/30 rounded text-xs">
+            <div className="flex items-center justify-between px-2 py-1.5 bg-[#0a0f1a] rounded text-xs">
               <div className="flex-1 min-w-0">
-                <p className="text-foreground font-medium truncate">
+                <p className="text-gray-300 font-medium truncate">
                   {data.fileName}
                 </p>
                 {data.fileSize && (
-                  <p className="text-muted-foreground">
+                  <p className="text-gray-500">
                     {formatFileSize(data.fileSize)}
                   </p>
                 )}
@@ -137,7 +133,7 @@ export default memo(function UploadVideoNode({ id, data }: NodeProps) {
                 variant="ghost"
                 size="icon"
                 onClick={handleClear}
-                className="h-7 w-7 flex-shrink-0 text-muted-foreground hover:text-destructive"
+                className="h-7 w-7 flex-shrink-0 text-gray-500 hover:text-red-400"
               >
                 <X className="h-4 w-4" />
               </Button>
@@ -151,12 +147,12 @@ export default memo(function UploadVideoNode({ id, data }: NodeProps) {
               id={`file-input-replace-${id}`}
               disabled={uploading}
             />
-            
+
             <label htmlFor={`file-input-replace-${id}`}>
               <Button
                 type="button"
                 variant="outline"
-                className="w-full"
+                className="w-full border-[#1e293b] bg-[#0a0f1a] text-gray-300 hover:bg-[#1e293b] hover:text-white"
                 disabled={uploading}
                 asChild
               >

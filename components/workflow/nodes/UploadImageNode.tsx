@@ -76,11 +76,13 @@ export default memo(function UploadImageNode({ id, data }: NodeProps) {
 
   return (
     <BaseNode
-      title="Upload Image"
-      icon={<ImageIcon className="w-4 h-4" />}
+      title={data.label || 'Upload Image'}
+      label={data.label}
+      icon={<ImageIcon className="w-4 h-4 text-emerald-400" />}
       outputs={[{ id: 'output', label: 'Image' }]}
       isRunning={data.isRunning || uploading}
-      headerColor="from-green-500/20 to-emerald-500/20"
+      isSuccess={data.imageUrl}
+      nodeType="input"
     >
       <div className="space-y-3">
         {!data.imageUrl ? (
@@ -96,12 +98,12 @@ export default memo(function UploadImageNode({ id, data }: NodeProps) {
             
             <label htmlFor={`file-input-${id}`}>
               <div className="cursor-pointer group">
-                <div className="border-2 border-dashed border-border rounded-lg p-8 hover:border-primary/50 hover:bg-primary/5 transition-all text-center">
-                  <Upload className="w-8 h-8 mx-auto mb-3 text-muted-foreground group-hover:text-primary transition-colors" />
-                  <p className="text-sm font-medium text-foreground mb-1">
+                <div className="border-2 border-dashed border-[#1e293b] rounded-lg p-6 hover:border-emerald-500/50 hover:bg-emerald-500/5 transition-all text-center">
+                  <Upload className="w-8 h-8 mx-auto mb-3 text-gray-500 group-hover:text-emerald-400 transition-colors" />
+                  <p className="text-sm font-medium text-gray-300 mb-1">
                     {uploading ? 'Uploading...' : 'Click to upload'}
                   </p>
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-xs text-gray-500">
                     JPG, PNG, WebP, GIF (max 10MB)
                   </p>
                 </div>
@@ -110,21 +112,21 @@ export default memo(function UploadImageNode({ id, data }: NodeProps) {
           </>
         ) : (
           <div className="space-y-2">
-            <div className="node-image-preview rounded-lg overflow-hidden border border-border">
+            <div className="rounded-lg overflow-hidden border border-[#1e293b]">
               <img
                 src={data.imageUrl}
                 alt={data.fileName || 'Uploaded'}
-                className="w-full h-48 object-cover"
+                className="w-full h-40 object-cover"
               />
             </div>
 
-            <div className="flex items-center justify-between px-2 py-1.5 bg-secondary/30 rounded text-xs">
+            <div className="flex items-center justify-between px-2 py-1.5 bg-[#0a0f1a] rounded text-xs">
               <div className="flex-1 min-w-0">
-                <p className="text-foreground font-medium truncate">
+                <p className="text-gray-300 font-medium truncate">
                   {data.fileName}
                 </p>
                 {data.fileSize && (
-                  <p className="text-muted-foreground">
+                  <p className="text-gray-500">
                     {formatFileSize(data.fileSize)}
                   </p>
                 )}
@@ -133,7 +135,7 @@ export default memo(function UploadImageNode({ id, data }: NodeProps) {
                 variant="ghost"
                 size="icon"
                 onClick={handleClear}
-                className="h-7 w-7 flex-shrink-0 text-muted-foreground hover:text-destructive"
+                className="h-7 w-7 flex-shrink-0 text-gray-500 hover:text-red-400"
               >
                 <X className="h-4 w-4" />
               </Button>
@@ -152,7 +154,7 @@ export default memo(function UploadImageNode({ id, data }: NodeProps) {
               <Button
                 type="button"
                 variant="outline"
-                className="w-full"
+                className="w-full border-[#1e293b] bg-[#0a0f1a] text-gray-300 hover:bg-[#1e293b] hover:text-white"
                 disabled={uploading}
                 asChild
               >

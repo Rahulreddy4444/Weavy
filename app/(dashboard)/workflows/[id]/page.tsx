@@ -6,20 +6,20 @@ import { ReactFlowProvider } from 'reactflow';
 import { toast } from 'sonner';
 import Canvas from '@/components/workflow/Canvas';
 import Sidebar from '@/components/workflow/Sidebar';
-import RightSidebar from '@/components/workflow/RightSidebar';
-import Toolbar from '@/components/workflow/Toolbar';
+import PropertiesPanel from '@/components/workflow/PropertiesPanel';
+import TopNavigation from '@/components/workflow/TopNavigation';
 import { useWorkflowStore } from '@/stores/workflow-store';
-import { Button } from '@/components/ui/button';
-import { ArrowLeft, Loader2 } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 
 export default function WorkflowPage({ params }: { params: Promise<{ id: string }> }) {
   const { id: workflowId } = use(params);
   const router = useRouter();
-  
+
   const { nodes, edges, setNodes, setEdges, selectedNodes, setIsRunning } = useWorkflowStore();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [workflow, setWorkflow] = useState<any>(null);
+  const [lastSaved, setLastSaved] = useState<string>('');
 
   useEffect(() => {
     loadWorkflow();
@@ -38,17 +38,22 @@ export default function WorkflowPage({ params }: { params: Promise<{ id: string 
   const loadWorkflow = async () => {
     try {
       const response = await fetch(`/api/workflows/${workflowId}`);
-      
+
       if (!response.ok) {
         throw new Error('Failed to load workflow');
       }
 
       const data = await response.json();
       const wf = data.workflow;
-      
+
       setWorkflow(wf);
       setNodes(wf.nodes || []);
       setEdges(wf.edges || []);
+
+      if (wf.updatedAt) {
+        const date = new Date(wf.updatedAt);
+        setLastSaved(date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+      }
     } catch (error) {
       console.error('Load error:', error);
       toast.error('Failed to load workflow');
@@ -60,7 +65,7 @@ export default function WorkflowPage({ params }: { params: Promise<{ id: string 
 
   const handleSave = async (silent = false) => {
     setSaving(true);
-    
+
     try {
       const response = await fetch(`/api/workflows/${workflowId}`, {
         method: 'PATCH',
@@ -74,6 +79,9 @@ export default function WorkflowPage({ params }: { params: Promise<{ id: string 
       if (!response.ok) {
         throw new Error('Save failed');
       }
+
+      const now = new Date();
+      setLastSaved(now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
 
       if (!silent) {
         toast.success('Workflow saved');
@@ -100,8 +108,8 @@ export default function WorkflowPage({ params }: { params: Promise<{ id: string 
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           selectedNodes: selectedNodes.length > 0 ? selectedNodes : undefined,
-          scope: selectedNodes.length === 0 ? 'FULL' : 
-                 selectedNodes.length === 1 ? 'SINGLE' : 'PARTIAL',
+          scope: selectedNodes.length === 0 ? 'FULL' :
+            selectedNodes.length === 1 ? 'SINGLE' : 'PARTIAL',
         }),
       });
 
@@ -156,14 +164,15 @@ export default function WorkflowPage({ params }: { params: Promise<{ id: string 
             useWorkflowStore.getState().updateNodeData(result.nodeId, {
               ...(result.output || {}),
               isRunning: false,
+              duration: result.duration,
             });
           });
-        } 
+        }
         else if (run.status === 'FAILED') {
           clearInterval(poll);
           setIsRunning(false);
           toast.error(`Workflow failed: ${run.error || 'Unknown error'}`);
-        } 
+        }
         else if (attempts >= maxAttempts) {
           clearInterval(poll);
           setIsRunning(false);
@@ -177,60 +186,41 @@ export default function WorkflowPage({ params }: { params: Promise<{ id: string 
 
   if (loading) {
     return (
-      <div className="h-screen flex items-center justify-center bg-[#050b18]">
-        <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
+      <div className="h-screen flex items-center justify-center bg-[#0a0f1a]">
+        <Loader2 className="h-8 w-8 animate-spin text-indigo-500" />
       </div>
     );
   }
 
   return (
-    <div className="h-screen flex flex-col bg-[#050b18]">
-      {/* Header Updated for Dark Mode Visibility */}
-      <header className="h-14 border-b border-white/10 bg-[#050b18] px-4 flex items-center justify-between z-20">
-        <div className="flex items-center gap-3">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="text-white hover:bg-white/10 hover:text-white"
-            onClick={() => router.push('/workflows')}
-          >
-            <ArrowLeft className="h-5 w-5" />
-          </Button>
-          <div>
-            <h1 className="font-semibold text-lg text-white leading-tight">
-              {workflow?.name || 'Workflow'}
-            </h1>
-            {workflow?.description && (
-              <p className="text-xs text-gray-400">{workflow.description}</p>
-            )}
-          </div>
-        </div>
+    <ReactFlowProvider>
+      <div className="h-screen flex flex-col bg-[#0a0f1a]">
+        {/* Top Navigation */}
+        <TopNavigation
+          workflowId={workflowId}
+          workflowName={workflow?.name || 'Untitled Workflow'}
+          workflowDescription={workflow?.description}
+          lastSaved={lastSaved}
+          onRun={handleRun}
+          onSave={() => handleSave(false)}
+          isRunning={useWorkflowStore.getState().isRunning}
+          isSaving={saving}
+        />
 
-        <div className="flex items-center gap-4">
-          {saving && (
-            <span className="text-sm text-gray-400 animate-pulse">Saving...</span>
-          )}
-        </div>
-      </header>
+        {/* Main Content */}
+        <div className="flex-1 flex overflow-hidden">
+          {/* Left Sidebar - Nodes */}
+          <Sidebar />
 
-      <div className="flex-1 flex overflow-hidden">
-        <Sidebar />
-        
-        <main className="flex-1 relative bg-[#050b18]">
-          <ReactFlowProvider>
+          {/* Canvas */}
+          <main className="flex-1 relative bg-[#0a0f1a]">
             <Canvas />
-            <div className="absolute top-4 left-1/2 -translate-x-1/2 z-50">
-              <Toolbar
-                workflowId={workflowId}
-                onRun={handleRun}
-                onSave={() => handleSave(false)}
-              />
-            </div>
-          </ReactFlowProvider>
-        </main>
+          </main>
 
-        <RightSidebar workflowId={workflowId} />
+          {/* Right Sidebar - Properties */}
+          <PropertiesPanel workflowId={workflowId} />
+        </div>
       </div>
-    </div>
+    </ReactFlowProvider>
   );
 }

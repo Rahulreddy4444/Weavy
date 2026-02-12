@@ -20,16 +20,18 @@ export default memo(function ExtractFrameNode({ id, data }: NodeProps) {
 
   return (
     <BaseNode
-      title="Extract Frame"
-      icon={<Film className="w-4 h-4" />}
+      title={data.label || 'Extract Frame'}
+      label={data.label}
+      icon={<Film className="w-4 h-4 text-pink-400" />}
       inputs={[{ id: 'video_url', label: 'Video' }]}
       outputs={[{ id: 'output', label: 'Frame' }]}
       isRunning={data.isRunning}
-      headerColor="from-cyan-500/20 to-blue-500/20"
+      isSuccess={data.extractedFrameUrl}
+      nodeType="transform"
     >
       <div className="space-y-3">
-        <div>
-          <Label className="text-xs font-medium text-muted-foreground mb-1.5 block">
+        <div className="space-y-1">
+          <Label className="text-xs font-medium text-gray-500 uppercase">
             Timestamp
           </Label>
           <Input
@@ -37,22 +39,22 @@ export default memo(function ExtractFrameNode({ id, data }: NodeProps) {
             value={data.timestamp || '0'}
             onChange={handleTimestampChange}
             placeholder="50% or 5.5s"
-            className="bg-background/50 border-border"
+            className="bg-[#0a0f1a] border-[#1e293b] text-gray-300 focus:border-pink-500/50"
           />
-          <p className="text-xs text-muted-foreground mt-1.5">
-            Use percentage (e.g., "50%") or seconds (e.g., "5.5")
+          <p className="text-xs text-gray-500">
+            Use percentage (e.g., &quot;50%&quot;) or seconds (e.g., &quot;5.5&quot;)
           </p>
         </div>
 
         {data.extractedFrameUrl && (
-          <div className="mt-3 node-image-preview rounded-lg overflow-hidden border border-border">
+          <div className="mt-3 rounded-lg overflow-hidden border border-[#1e293b]">
             <img
               src={data.extractedFrameUrl}
               alt="Extracted frame"
-              className="w-full h-40 object-cover"
+              className="w-full h-32 object-cover"
             />
-            <div className="px-2 py-1.5 bg-secondary/30 text-xs text-muted-foreground">
-              Extracted Frame @ {data.timestamp}
+            <div className="px-2 py-1.5 bg-[#0a0f1a] text-xs text-gray-500">
+              Frame @ {data.timestamp}
             </div>
           </div>
         )}

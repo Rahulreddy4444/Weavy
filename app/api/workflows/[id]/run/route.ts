@@ -1,12 +1,12 @@
+import { createCanvas, loadImage } from 'canvas';
+import fs from 'fs';
+import path from 'path';
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { prisma } from '@/lib/prisma';
 import { GoogleGenerativeAI } from '@google/generative-ai';
-import { createCanvas, loadImage } from 'canvas';
 
-// const genAI = new GoogleGenerativeAI(process.env.GOOGLE_GEMINI_API_KEY || '');
 const genAI = new GoogleGenerativeAI(process.env.GOOGLE_GEMINI_API_KEY || '');
-
 
 export async function POST(
   request: NextRequest,
@@ -57,8 +57,10 @@ async function executeWorkflow(runId: string, nodes: any[], edges: any[]) {
   const startTime = Date.now();
 
   try {
-    // Note: In a production app, you should sort 'nodes' by dependency (Topological Sort)
-    for (const node of nodes) {
+    // Sort nodes by dependency
+    const sortedNodes = sortNodesTopologically(nodes, edges);
+
+    for (const node of sortedNodes) {
       const nodeStartTime = Date.now();
       try {
         let output: any = {};
@@ -68,87 +70,292 @@ async function executeWorkflow(runId: string, nodes: any[], edges: any[]) {
             output = { text: node.data.text || '' };
             break;
 
-        case 'llmNode': {
-          const incomingEdges = edges.filter(e => e.target === node.id);
-          const incomingTexts: string[] = [];
+          case 'uploadImageNode':
+            output = {
+              imageUrl: node.data.imageUrl,
+              fileName: node.data.fileName,
+              fileSize: node.data.fileSize
+            };
+            break;
 
-          // 1. Collect text from all connected nodes (e.g., your two Text Nodes)
-          for (const edge of incomingEdges) {
-            const prevResult = nodeResults.find(r => r.nodeId === edge.source);
-            if (prevResult && prevResult.status === 'success') {
-              const text = prevResult.output.text || prevResult.output.response || '';
-              incomingTexts.push(text);
+          case 'uploadVideoNode':
+            output = {
+              videoUrl: node.data.videoUrl,
+              fileName: node.data.fileName,
+              fileSize: node.data.fileSize
+            };
+            break;
+
+          case 'extractFrameNode': {
+            const incomingEdges = edges.filter(e => e.target === node.id);
+            const sourceResult = nodeResults.find(r =>
+              incomingEdges.some(e => e.source === r.nodeId) && r.status === 'success'
+            );
+
+            if (!sourceResult || !sourceResult.output.videoUrl) {
+              throw new Error('Extract Frame node requires a video input');
             }
+
+            // FALLBACK: Generate a placeholder frame since FFmpeg is not available
+            const width = 640;
+            const height = 360;
+            const canvas = createCanvas(width, height);
+            const ctx = canvas.getContext('2d');
+
+            // Draw placeholder background
+            ctx.fillStyle = '#1e293b';
+            ctx.fillRect(0, 0, width, height);
+
+            // Draw text
+            ctx.fillStyle = '#94a3b8';
+            ctx.font = '24px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('Video Frame Extraction', width / 2, height / 2 - 20);
+            ctx.font = '16px sans-serif';
+            ctx.fillText(`Timestamp: ${node.data.timestamp || '0'}`, width / 2, height / 2 + 20);
+            ctx.fillText('(Requires FFmpeg on server)', width / 2, height / 2 + 50);
+
+            // Save placeholder to disk
+            const uploadsDir = path.join(process.cwd(), 'public', 'uploads');
+            if (!fs.existsSync(uploadsDir)) {
+              fs.mkdirSync(uploadsDir, { recursive: true });
+            }
+
+            const fileName = `frame-${Date.now()}-${Math.random().toString(36).substring(7)}.png`;
+            const filePath = path.join(uploadsDir, fileName);
+            const buffer = canvas.toBuffer('image/png');
+            fs.writeFileSync(filePath, buffer);
+
+            output = {
+              extractedFrameUrl: `/uploads/${fileName}`,
+              imageUrl: `/uploads/${fileName}` // Also provide imageUrl for compatibility with other nodes
+            };
+            break;
+          }
+          case 'cropImageNode': {
+            const incomingEdges = edges.filter(e => e.target === node.id);
+            const sourceResult = nodeResults.find(r =>
+              incomingEdges.some(e => e.source === r.nodeId) && r.status === 'success'
+            );
+
+            if (!sourceResult || !sourceResult.output.imageUrl) {
+              throw new Error('Crop node requires an image input');
+            }
+
+            const imageUrl = sourceResult.output.imageUrl;
+            const image = await loadImage(imageUrl);
+
+            // Calculate crop dimensions
+            // node.data stores percentages: xPercent, yPercent, widthPercent, heightPercent
+            const width = image.width;
+            const height = image.height;
+
+            const x = Math.floor((node.data.xPercent || 0) / 100 * width);
+            const y = Math.floor((node.data.yPercent || 0) / 100 * height);
+            const w = Math.floor((node.data.widthPercent || 100) / 100 * width);
+            const h = Math.floor((node.data.heightPercent || 100) / 100 * height);
+
+            // Validate bounds to prevent canvas errors
+            const cropX = Math.max(0, Math.min(x, width));
+            const cropY = Math.max(0, Math.min(y, height));
+            const cropW = Math.max(1, Math.min(w, width - cropX));
+            const cropH = Math.max(1, Math.min(h, height - cropY));
+
+            const canvas = createCanvas(cropW, cropH);
+            const ctx = canvas.getContext('2d');
+
+            ctx.drawImage(image, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
+
+            // SAVE TO DISK INSTEAD OF BASE64
+            const uploadsDir = path.join(process.cwd(), 'public', 'uploads');
+            if (!fs.existsSync(uploadsDir)) {
+              fs.mkdirSync(uploadsDir, { recursive: true });
+            }
+
+            const fileName = `crop-${Date.now()}-${Math.random().toString(36).substring(7)}.png`;
+            const filePath = path.join(uploadsDir, fileName);
+            const buffer = canvas.toBuffer('image/png');
+            fs.writeFileSync(filePath, buffer);
+
+            output = {
+              imageUrl: `/uploads/${fileName}`,
+              width: cropW,
+              height: cropH
+            };
+            break;
           }
 
-          // 2. Merge the texts into one message
-          const mergedMessage = incomingTexts.join('\n') || node.data.userMessage || "No input provided";
+          case 'outputNode': {
+            const incomingEdges = edges.filter(e => e.target === node.id);
+            const sourceResult = nodeResults.find(r =>
+              incomingEdges.some(e => e.source === r.nodeId) && r.status === 'success'
+            );
 
-          // 3. Use a confirmed working model (Gemini 1.5 Flash or 2.5 Flash)
-          const model = genAI.getGenerativeModel({ 
-            model: node.data.model || 'gemini-1.5-flash',
-            systemInstruction: node.data.systemPrompt // Use the prompt you wrote in the UI
-          });
+            if (sourceResult) {
+              output = sourceResult.output;
+            }
+            break;
+          }
 
-          const result = await model.generateContent(mergedMessage);
-          const response = await result.response;
-          output = { response: response.text() };
-          break;
-        }
+          case 'llmNode': {
+            const incomingEdges = edges.filter(e => e.target === node.id);
+            const incomingTexts: string[] = [];
+            let inputImage: { url: string; path: string; mimeType: string } | null = null;
 
-  
+            // Collect text and images from all connected nodes
+            for (const edge of incomingEdges) {
+              const prevResult = nodeResults.find(r => r.nodeId === edge.source);
+              if (prevResult && prevResult.status === 'success') {
+                // Collect Text
+                const text = prevResult.output.text || prevResult.output.response || '';
+                if (text) incomingTexts.push(text);
 
-        // case 'llmNode': {
-        //     const incomingEdges = edges.filter(e => e.target === node.id);
-        //     const parts: any[] = [];
-        //     let sourceImageUrl = '';
+                // Collect Image (take the first one found)
+                if (!inputImage && prevResult.output.imageUrl) {
+                  const imageUrl = prevResult.output.imageUrl;
+                  // Convert URL to local file path
+                  // imageUrl is like "/uploads/file.png"
+                  if (imageUrl.startsWith('/uploads/')) {
+                    const relativePath = imageUrl.substring(1); // Remove leading slash
+                    const absolutePath = path.join(process.cwd(), 'public', relativePath);
+                    inputImage = {
+                      url: imageUrl,
+                      path: absolutePath,
+                      mimeType: 'image/png' // Assuming png for now, can infer from extension
+                    };
+                  }
+                }
+              }
+            }
 
-        //     for (const edge of incomingEdges) {
-        //       const prevResult = nodeResults.find(r => r.nodeId === edge.source);
-        //       if (prevResult && prevResult.status === 'success') {
-        //         // 1. Capture the image URL for later processing
-        //         if (prevResult.nodeType === 'uploadImageNode') {
-        //           sourceImageUrl = prevResult.output.imageUrl;
-        //           const imgResp = await fetch(sourceImageUrl);
-        //           const buffer = Buffer.from(await imgResp.arrayBuffer());
-        //           parts.push({ inlineData: { mimeType: "image/png", data: buffer.toString('base64') }});
-        //         }
-        //         // 2. Capture text inputs
-        //         if (prevResult.nodeType === 'textNode') {
-        //           parts.push({ text: prevResult.output.text });
-        //         }
-        //       }
-        //     }
+            const mergedMessage = incomingTexts.join('\n') || node.data.userMessage || 'No input provided';
+            const selectedModel = node.data.model || 'gemini-1.5-flash';
+            const systemPrompt = node.data.systemPrompt || '';
 
-        //     // 3. Get text instructions from Gemini
-        //     const model = genAI.getGenerativeModel({ model: node.data.model || 'gemini-1.5-flash' });
-        //     const result = await model.generateContent({ contents: [{ role: 'user', parts }] });
-        //     const overlayText = result.response.text();
+            let responseText = '';
 
-        //     // 4. GENERATE RESULTANT IMAGE (The fix you requested)
-        //     if (sourceImageUrl) {
-        //       const image = await loadImage(sourceImageUrl);
-        //       const canvas = createCanvas(image.width, image.height);
-        //       const ctx = canvas.getContext('2d');
+            // ✅ GEMINI MODELS
+            if (selectedModel.startsWith('gemini')) {
+              const model = genAI.getGenerativeModel({
+                model: selectedModel,
+                ...(systemPrompt && { systemInstruction: systemPrompt }),
+              });
 
-        //       ctx.drawImage(image, 0, 0);
-        //       ctx.font = 'bold 40px sans-serif';
-        //       ctx.fillStyle = 'white';
-        //       ctx.strokeStyle = 'black';
-        //       ctx.lineWidth = 2;
-        //       ctx.strokeText(overlayText, 50, 100);
-        //       ctx.fillText(overlayText, 50, 100);
+              const promptParts: any[] = [mergedMessage];
 
-        //       // Update output to include the new image
-        //       output = { 
-        //         response: overlayText,
-        //         resultantImageUrl: canvas.toDataURL() // This is your new base64 image
-        //       };
-        //     } else {
-        //       output = { response: overlayText };
-        //     }
-        //     break;
-        //   }
+              // Add image if available
+              if (inputImage && fs.existsSync(inputImage.path)) {
+                const imageBuffer = fs.readFileSync(inputImage.path);
+                const imageBase64 = imageBuffer.toString('base64');
+                promptParts.push({
+                  inlineData: {
+                    data: imageBase64,
+                    mimeType: inputImage.mimeType
+                  }
+                });
+              }
+
+              const result = await model.generateContent(promptParts);
+              responseText = result.response.text();
+            }
+
+            // ✅ OPENAI GPT MODELS
+            else if (selectedModel.startsWith('gpt')) {
+              if (!process.env.OPENAI_API_KEY) {
+                throw new Error('OpenAI API key not set in environment variables');
+              }
+              // ... (Start of OpenAI fetch, leaving existing structure)
+              const messages: any[] = [
+                { role: 'system', content: systemPrompt || 'You are a helpful assistant.' },
+                {
+                  role: 'user',
+                  content: inputImage ? [
+                    { type: 'text', text: mergedMessage },
+                    {
+                      type: 'image_url',
+                      image_url: {
+                        // OpenAI needs a public URL or base64 data url. 
+                        // Since we are running locally, we need to pass base64 data url.
+                        url: `data:${inputImage.mimeType};base64,${fs.readFileSync(inputImage.path).toString('base64')}`
+                      }
+                    }
+                  ] : mergedMessage
+                }
+              ];
+
+              const response = await fetch('https://api.openai.com/v1/chat/completions', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
+                },
+                body: JSON.stringify({
+                  model: selectedModel,
+                  messages: messages,
+                }),
+              });
+
+              if (!response.ok) {
+                const err = await response.json();
+                throw new Error(err.error?.message || 'OpenAI API error');
+              }
+
+              const data = await response.json();
+              responseText = data.choices[0].message.content;
+            }
+
+            // ✅ ANTHROPIC MODELS
+            else if (selectedModel.startsWith('claude')) {
+              // ... (similarly handle image for claude if needed, skipping for brevity/focus on Gemini/OpenAI first)
+              if (!process.env.ANTHROPIC_API_KEY) {
+                throw new Error('Anthropic API key not set');
+              }
+
+              // Construct content array
+              const content: any[] = [{ type: 'text', text: mergedMessage }];
+              if (inputImage) {
+                content.push({
+                  type: 'image',
+                  source: {
+                    type: 'base64',
+                    media_type: inputImage.mimeType,
+                    data: fs.readFileSync(inputImage.path).toString('base64')
+                  }
+                });
+              }
+
+              const response = await fetch('https://api.anthropic.com/v1/messages', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'x-api-key': process.env.ANTHROPIC_API_KEY,
+                  'anthropic-version': '2023-06-01',
+                },
+                body: JSON.stringify({
+                  model: selectedModel,
+                  max_tokens: 1024,
+                  messages: [{ role: 'user', content }],
+                  system: systemPrompt,
+                }),
+              });
+
+              if (!response.ok) {
+                const err = await response.json();
+                throw new Error(err.error?.message || 'Anthropic API error');
+              }
+
+              const data = await response.json();
+              responseText = data.content[0].text;
+            }
+
+            output = {
+              response: responseText,
+              // Pass through the image URL so the output node can display it
+              ...(inputImage ? { imageUrl: inputImage.url } : {})
+            };
+            break;
+          }
 
           default:
             output = node.data || {};
@@ -183,10 +390,69 @@ async function executeWorkflow(runId: string, nodes: any[], edges: any[]) {
         nodeResults: JSON.stringify(nodeResults),
       },
     });
+
   } catch (error: any) {
     await prisma.workflowRun.update({
       where: { id: runId },
-      data: { status: 'FAILED', error: error.message, nodeResults: JSON.stringify(nodeResults) },
+      data: {
+        status: 'FAILED',
+        error: error.message,
+        nodeResults: JSON.stringify(nodeResults),
+      },
     });
   }
+}
+
+function sortNodesTopologically(nodes: any[], edges: any[]): any[] {
+  const nodeMap = new Map(nodes.map(node => [node.id, node]));
+  const adjacencyList = new Map<string, string[]>();
+  const inDegree = new Map<string, number>();
+
+  // Initialize
+  nodes.forEach(node => {
+    adjacencyList.set(node.id, []);
+    inDegree.set(node.id, 0);
+  });
+
+  // Build graph
+  edges.forEach(edge => {
+    if (nodeMap.has(edge.source) && nodeMap.has(edge.target)) {
+      adjacencyList.get(edge.source)?.push(edge.target);
+      inDegree.set(edge.target, (inDegree.get(edge.target) || 0) + 1);
+    }
+  });
+
+  // Kahn's Algorithm
+  const queue: string[] = [];
+  inDegree.forEach((degree, id) => {
+    if (degree === 0) queue.push(id);
+  });
+
+  const sortedNodes: any[] = [];
+
+  while (queue.length > 0) {
+    const nodeId = queue.shift()!;
+    const node = nodeMap.get(nodeId);
+    if (node) sortedNodes.push(node);
+
+    const neighbors = adjacencyList.get(nodeId) || [];
+    for (const neighbor of neighbors) {
+      inDegree.set(neighbor, (inDegree.get(neighbor) || 0) - 1);
+      if (inDegree.get(neighbor) === 0) {
+        queue.push(neighbor);
+      }
+    }
+  }
+
+  // If cycle detected or disconnected components remain, append remaining nodes
+  if (sortedNodes.length !== nodes.length) {
+    const processedIds = new Set(sortedNodes.map(n => n.id));
+    nodes.forEach(node => {
+      if (!processedIds.has(node.id)) {
+        sortedNodes.push(node);
+      }
+    });
+  }
+
+  return sortedNodes;
 }

@@ -21,18 +21,20 @@ export default memo(function CropImageNode({ id, data }: NodeProps) {
 
   return (
     <BaseNode
-      title="Crop Image"
-      icon={<Crop className="w-4 h-4" />}
+      title={data.label || 'Crop Image'}
+      label={data.label}
+      icon={<Crop className="w-4 h-4 text-pink-400" />}
       inputs={[{ id: 'image_url', label: 'Image' }]}
       outputs={[{ id: 'output', label: 'Cropped' }]}
       isRunning={data.isRunning}
-      headerColor="from-pink-500/20 to-rose-500/20"
+      isSuccess={data.imageUrl}
+      nodeType="transform"
     >
       <div className="space-y-3">
         <div className="grid grid-cols-2 gap-3">
-          <div>
-            <Label className="text-xs font-medium text-muted-foreground mb-1.5 block">
-              X Position %
+          <div className="space-y-1">
+            <Label className="text-xs font-medium text-gray-500 uppercase">
+              X %
             </Label>
             <Input
               type="number"
@@ -41,12 +43,12 @@ export default memo(function CropImageNode({ id, data }: NodeProps) {
               step="1"
               value={data.xPercent || 0}
               onChange={handleChange('xPercent')}
-              className="bg-background/50 border-border"
+              className="bg-[#0a0f1a] border-[#1e293b] text-gray-300 focus:border-pink-500/50"
             />
           </div>
-          <div>
-            <Label className="text-xs font-medium text-muted-foreground mb-1.5 block">
-              Y Position %
+          <div className="space-y-1">
+            <Label className="text-xs font-medium text-gray-500 uppercase">
+              Y %
             </Label>
             <Input
               type="number"
@@ -55,14 +57,14 @@ export default memo(function CropImageNode({ id, data }: NodeProps) {
               step="1"
               value={data.yPercent || 0}
               onChange={handleChange('yPercent')}
-              className="bg-background/50 border-border"
+              className="bg-[#0a0f1a] border-[#1e293b] text-gray-300 focus:border-pink-500/50"
             />
           </div>
         </div>
 
         <div className="grid grid-cols-2 gap-3">
-          <div>
-            <Label className="text-xs font-medium text-muted-foreground mb-1.5 block">
+          <div className="space-y-1">
+            <Label className="text-xs font-medium text-gray-500 uppercase">
               Width %
             </Label>
             <Input
@@ -72,11 +74,11 @@ export default memo(function CropImageNode({ id, data }: NodeProps) {
               step="1"
               value={data.widthPercent || 100}
               onChange={handleChange('widthPercent')}
-              className="bg-background/50 border-border"
+              className="bg-[#0a0f1a] border-[#1e293b] text-gray-300 focus:border-pink-500/50"
             />
           </div>
-          <div>
-            <Label className="text-xs font-medium text-muted-foreground mb-1.5 block">
+          <div className="space-y-1">
+            <Label className="text-xs font-medium text-gray-500 uppercase">
               Height %
             </Label>
             <Input
@@ -86,19 +88,19 @@ export default memo(function CropImageNode({ id, data }: NodeProps) {
               step="1"
               value={data.heightPercent || 100}
               onChange={handleChange('heightPercent')}
-              className="bg-background/50 border-border"
+              className="bg-[#0a0f1a] border-[#1e293b] text-gray-300 focus:border-pink-500/50"
             />
           </div>
         </div>
 
-        {data.croppedUrl && (
-          <div className="mt-3 node-image-preview rounded-lg overflow-hidden border border-border">
+        {data.imageUrl && (
+          <div className="mt-3 rounded-lg overflow-hidden border border-[#1e293b]">
             <img
-              src={data.croppedUrl}
+              src={data.imageUrl}
               alt="Cropped"
-              className="w-full h-40 object-cover"
+              className="w-full h-32 object-cover"
             />
-            <div className="px-2 py-1.5 bg-secondary/30 text-xs text-muted-foreground">
+            <div className="px-2 py-1.5 bg-[#0a0f1a] text-xs text-gray-500">
               Cropped Result
             </div>
           </div>

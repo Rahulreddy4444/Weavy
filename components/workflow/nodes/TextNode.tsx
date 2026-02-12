@@ -22,23 +22,25 @@ export default memo(function TextNode({ id, data }: NodeProps) {
 
   return (
     <BaseNode
-      title="Text Input"
-      icon={<Type className="w-4 h-4" />}
+      title={data.label || 'Text Input'}
+      label={data.label}
+      icon={<Type className="w-4 h-4 text-emerald-400" />}
       outputs={[{ id: 'output', label: 'Text' }]}
       isRunning={data.isRunning}
-      headerColor="from-blue-500/20 to-cyan-500/20"
+      isSuccess={data.response || data.text}
+      nodeType="input"
     >
       <div className="space-y-2">
-        <Label className="text-xs font-medium text-muted-foreground">
+        <Label className="text-xs font-medium text-gray-500 uppercase">
           Content
         </Label>
         <Textarea
           value={data.text || ''}
           onChange={handleChange}
-          placeholder="Enter text..."
-          className="min-h-[120px] text-sm bg-background/50 border-border resize-none font-mono"
+          placeholder="Enter text content..."
+          className="min-h-[100px] text-sm bg-[#0a0f1a] border-[#1e293b] text-gray-300 resize-none focus:border-emerald-500/50 placeholder:text-gray-600"
         />
-        <div className="flex justify-between items-center text-xs text-muted-foreground">
+        <div className="flex justify-between items-center text-xs text-gray-500">
           <span>{charCount} characters</span>
           {charCount > 0 && (
             <span>{data.text?.split('\n').length || 0} lines</span>

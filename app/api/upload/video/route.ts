@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
+import fs from 'fs';
+import path from 'path';
 
 export async function POST(request: NextRequest) {
   try {
     const { userId } = await auth();
-    
+
     if (!userId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -24,8 +26,19 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // For demo purposes, create a mock URL
-    const url = `https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4`;
+    // SAVE TO DISK
+    const buffer = Buffer.from(await file.arrayBuffer());
+    const uploadsDir = path.join(process.cwd(), 'public', 'uploads');
+
+    if (!fs.existsSync(uploadsDir)) {
+      fs.mkdirSync(uploadsDir, { recursive: true });
+    }
+
+    const fileName = `video-${Date.now()}-${Math.random().toString(36).substring(7)}${path.extname(file.name)}`;
+    const filePath = path.join(uploadsDir, fileName);
+
+    fs.writeFileSync(filePath, buffer);
+    const url = `/uploads/${fileName}`;
 
     return NextResponse.json({ url });
   } catch (error) {

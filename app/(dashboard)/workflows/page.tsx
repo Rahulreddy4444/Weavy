@@ -38,7 +38,10 @@ export default function WorkflowsPage() {
     description: '',
   });
 
+  const [mounted, setMounted] = useState(false);
+
   useEffect(() => {
+    setMounted(true);
     loadWorkflows();
   }, []);
 
@@ -57,7 +60,7 @@ export default function WorkflowsPage() {
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!newWorkflow.name.trim()) {
       toast.error('Workflow name is required');
       return;
@@ -107,6 +110,8 @@ export default function WorkflowsPage() {
       toast.error('Failed to delete workflow');
     }
   };
+
+  if (!mounted) return null;
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -198,7 +203,7 @@ export default function WorkflowsPage() {
           <Card>
             <CardContent className="flex flex-col items-center justify-center py-12">
               <Workflow className="h-12 w-12 text-gray-300 mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 mb-2">
+              <h3 className="text-lg font-medium text-gray-700 mb-2">
                 No workflows yet
               </h3>
               <p className="text-gray-500 mb-4">
