@@ -200,47 +200,65 @@ async function executeWorkflow(runId: string, nodes: any[], edges: any[]) {
 
           case 'llmNode': {
             const incomingEdges = edges.filter(e => e.target === node.id);
-            const incomingTexts: string[] = [];
+            const userMessages: string[] = [];
+            let systemPromptInput = '';
             let inputImage: { url: string; path: string; mimeType: string } | null = null;
 
             // Collect text and images from all connected nodes
             for (const edge of incomingEdges) {
               const prevResult = nodeResults.find(r => r.nodeId === edge.source);
               if (prevResult && prevResult.status === 'success') {
-                // Collect Text
-                const text = prevResult.output.text || prevResult.output.response || '';
-                if (text) incomingTexts.push(text);
 
-                // Collect Image (take the first one found)
-                if (!inputImage && prevResult.output.imageUrl) {
-                  const imageUrl = prevResult.output.imageUrl;
-                  // Convert URL to local file path
-                  // imageUrl is like "/uploads/file.png"
-                  if (imageUrl.startsWith('/uploads/')) {
-                    const relativePath = imageUrl.substring(1); // Remove leading slash
-                    const absolutePath = path.join(process.cwd(), 'public', relativePath);
-                    inputImage = {
-                      url: imageUrl,
-                      path: absolutePath,
-                      mimeType: 'image/png' // Assuming png for now, can infer from extension
-                    };
+                // Handle System Prompt connection
+                if (edge.targetHandle === 'system_prompt') {
+                  const text = prevResult.output.text || prevResult.output.response || '';
+                  if (text) systemPromptInput = text;
+                }
+
+                // Handle Image connection
+                else if (edge.targetHandle === 'images') {
+                  if (!inputImage && prevResult.output.imageUrl) {
+                    const imageUrl = prevResult.output.imageUrl;
+                    // Convert URL to local file path
+                    // imageUrl is like "/uploads/file.png"
+                    if (imageUrl.startsWith('/uploads/')) {
+                      const relativePath = imageUrl.substring(1); // Remove leading slash
+                      const absolutePath = path.join(process.cwd(), 'public', relativePath);
+                      inputImage = {
+                        url: imageUrl,
+                        path: absolutePath,
+                        mimeType: 'image/png' // Assuming png for now, can infer from extension
+                      };
+                    }
                   }
+                }
+
+                // Handle User Messages (default or dynamic inputs like user_message_0)
+                else {
+                  const text = prevResult.output.text || prevResult.output.response || '';
+                  if (text) userMessages.push(text);
                 }
               }
             }
 
-            const mergedMessage = incomingTexts.join('\n') || node.data.userMessage || 'No input provided';
-            const selectedModel = node.data.model || 'gemini-1.5-flash';
-            const systemPrompt = node.data.systemPrompt || '';
+            const mergedMessage = userMessages.join('\n') || node.data.userMessage || 'No input provided';
+            const selectedModel = node.data.model || 'gemini-1.5-flash-latest';
+            // System prompt priority: Connected Input > Manual Input
+            const systemPrompt = systemPromptInput || node.data.systemPrompt || '';
 
             let responseText = '';
 
             // ✅ GEMINI MODELS
             if (selectedModel.startsWith('gemini')) {
-              const model = genAI.getGenerativeModel({
-                model: selectedModel,
-                ...(systemPrompt && { systemInstruction: systemPrompt }),
-              });
+              // Prepare the model config. Note: System instructions are supported in 1.5 models.
+              // If using an older model like gemini-pro, systemInstruction might cause issues, 
+              // but we default to 1.5-flash which supports it.
+              const modelConfig: any = { model: selectedModel };
+              if (systemPrompt) {
+                modelConfig.systemInstruction = systemPrompt;
+              }
+
+              const model = genAI.getGenerativeModel(modelConfig);
 
               const promptParts: any[] = [mergedMessage];
 
@@ -265,7 +283,7 @@ async function executeWorkflow(runId: string, nodes: any[], edges: any[]) {
               if (!process.env.OPENAI_API_KEY) {
                 throw new Error('OpenAI API key not set in environment variables');
               }
-              // ... (Start of OpenAI fetch, leaving existing structure)
+
               const messages: any[] = [
                 { role: 'system', content: systemPrompt || 'You are a helpful assistant.' },
                 {
@@ -307,7 +325,6 @@ async function executeWorkflow(runId: string, nodes: any[], edges: any[]) {
 
             // ✅ ANTHROPIC MODELS
             else if (selectedModel.startsWith('claude')) {
-              // ... (similarly handle image for claude if needed, skipping for brevity/focus on Gemini/OpenAI first)
               if (!process.env.ANTHROPIC_API_KEY) {
                 throw new Error('Anthropic API key not set');
               }
@@ -353,6 +370,158 @@ async function executeWorkflow(runId: string, nodes: any[], edges: any[]) {
               response: responseText,
               // Pass through the image URL so the output node can display it
               ...(inputImage ? { imageUrl: inputImage.url } : {})
+            };
+            break;
+          }
+
+          case 'textToImageNode': {
+            const incomingEdges = edges.filter(e => e.target === node.id);
+            const sourceResult = nodeResults.find(r =>
+              incomingEdges.some(e => e.source === r.nodeId) && r.status === 'success'
+            );
+
+            // Prompt priority: Connected Input > Manual Input
+            const prompt = sourceResult?.output?.text || sourceResult?.output?.response || node.data.prompt;
+
+            if (!prompt) {
+              throw new Error('Prompt is required for image generation');
+            }
+
+            // MOCK IMPLEMENTATION FOR IMAGE GENERATION
+            // OpenAI API key has billing limits, so we use a placeholder service.
+
+            // Wait for 1.5 seconds to simulate processing
+            await new Promise(resolve => setTimeout(resolve, 1500));
+
+            // Use Picsum to generate a consistent image based on the prompt length/content
+            // This ensures "dog" always gives the same image, but "cat" gives a different one.
+            const seed = prompt.split('').reduce((acc: number, char: string) => acc + char.charCodeAt(0), 0);
+            const imageUrl = `https://picsum.photos/seed/${seed}/1024/1024`;
+
+            output = {
+              imageUrl: imageUrl,
+              prompt: prompt
+            };
+            break;
+          }
+
+          case 'textToVideoNode': {
+            const incomingEdges = edges.filter(e => e.target === node.id);
+            const sourceResult = nodeResults.find(r =>
+              incomingEdges.some(e => e.source === r.nodeId) && r.status === 'success'
+            );
+
+            // Prompt priority: Connected Input > Manual Input
+            const prompt = sourceResult?.output?.text || sourceResult?.output?.response || node.data.prompt;
+
+            if (!prompt) {
+              throw new Error('Prompt is required for video generation');
+            }
+
+            // VEO 3.1 IMPLEMENTATION via Gemini API REST Endpoint
+            const apiKey = process.env.GOOGLE_GEMINI_API_KEY;
+            if (!apiKey) {
+              throw new Error('Google Gemini API key not found');
+            }
+
+            // Using the specific 2.0 preview model (more widely available than 3.1)
+            const modelId = 'veo-2.0-generate-uhd-preview';
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelId}:predict?key=${apiKey}`;
+
+            // 1. Start generation
+            console.log(`Starting Veo generation with model: ${modelId}`);
+
+            let videoUrl = '';
+            let warningMessage = '';
+
+            try {
+              let response = await fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  instances: [{ prompt: prompt }],
+                  parameters: {
+                    sampleCount: 1,
+                    videoLength: "6s",
+                    aspectRatio: "16:9"
+                  }
+                })
+              });
+
+              if (!response.ok) {
+                const errBody = await response.json().catch(() => ({}));
+                console.warn(`Veo 3.1 API call failed: ${response.status} ${response.statusText}`, errBody);
+
+                // SOFT FAIL: If model not found (404) or permission denied (403), fall back to placeholder
+                if (response.status === 404 || response.status === 403 || response.status === 400) {
+                  warningMessage = `Veo Model (${modelId}) not available for this API key. Using placeholder.`;
+                  throw new Error("SOFT_FAIL");
+                }
+                throw new Error(errBody.error?.message || `Veo API error: ${response.status}`);
+              }
+
+              let data = await response.json();
+
+              // 2. Poll for results if LRO
+              let operationName = data.name;
+
+              if (!data.predictions && operationName) {
+                console.log(`Veo generation started. Operation: ${operationName}`);
+
+                // Poll loop (max 120 seconds)
+                const startTime = Date.now();
+                while (Date.now() - startTime < 120000) {
+                  await new Promise(resolve => setTimeout(resolve, 5000));
+
+                  const pollUrl = `https://generativelanguage.googleapis.com/v1beta/${operationName}?key=${apiKey}`;
+                  const pollResponse = await fetch(pollUrl);
+
+                  if (!pollResponse.ok) throw new Error("Polling failed");
+
+                  const operation = await pollResponse.json();
+                  if (operation.done) {
+                    if (operation.error) throw new Error(operation.error.message);
+                    if (operation.response?.predictions) {
+                      data = operation.response;
+                      break;
+                    }
+                    throw new Error('No predictions found in completed operation');
+                  }
+                }
+              }
+
+              // 3. Process Result
+              if (data.predictions?.[0]) {
+                const prediction = data.predictions[0];
+                if (prediction.videoUri) {
+                  videoUrl = prediction.videoUri;
+                } else if (prediction.bytesBase64Encoded) {
+                  const videoBuffer = Buffer.from(prediction.bytesBase64Encoded, 'base64');
+                  const uploadsDir = path.join(process.cwd(), 'public', 'uploads');
+                  if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
+                  const fileName = `veo-${Date.now()}.mp4`;
+                  const filePath = path.join(uploadsDir, fileName);
+                  fs.writeFileSync(filePath, videoBuffer);
+                  videoUrl = `/uploads/${fileName}`;
+                }
+              }
+            } catch (err: any) {
+              if (err.message === "SOFT_FAIL") {
+                // Fallback handled below
+              } else {
+                console.error("Video execution error:", err);
+                warningMessage = `Generation failed: ${err.message}. Using placeholder.`;
+              }
+            }
+
+            if (!videoUrl) {
+              videoUrl = 'https://www.w3schools.com/html/mov_bbb.mp4';
+            }
+
+            output = {
+              videoUrl: videoUrl,
+              prompt: prompt,
+              warning: warningMessage
             };
             break;
           }

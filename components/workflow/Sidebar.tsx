@@ -4,7 +4,6 @@ import { useState } from 'react';
 import {
   Type,
   Image,
-  Video,
   Sparkles,
   Crop,
   Film,
@@ -16,7 +15,9 @@ import {
   Link2,
   FileOutput,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  ImageIcon,
+  Video
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -72,6 +73,25 @@ const NODE_CATEGORIES: NodeCategory[] = [
         icon: Sparkles,
         description: 'Multi-model AI (GPT, Claude, Gemini)',
         color: 'from-violet-500 to-purple-600',
+      },
+    ],
+  },
+  {
+    category: 'GENERATIVE',
+    nodes: [
+      {
+        type: 'textToImageNode',
+        label: 'Text to Image',
+        icon: ImageIcon,
+        description: 'Generate images from text',
+        color: 'from-pink-500 to-rose-600',
+      },
+      {
+        type: 'textToVideoNode',
+        label: 'Text to Video',
+        icon: Video,
+        description: 'Generate videos from text',
+        color: 'from-orange-500 to-red-600',
       },
     ],
   },

@@ -2,16 +2,13 @@
 
 import { useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { useReactFlow } from 'reactflow';
+import { useReactFlow, useViewport } from 'reactflow';
 import {
     ArrowLeft,
     LayoutDashboard,
-    Wand2,
-    FileText,
+    Zap,
     Search,
     Bell,
-    Moon,
-    Sun,
     Undo2,
     Redo2,
     ZoomIn,
@@ -22,7 +19,6 @@ import {
     Upload,
     Play,
     Loader2,
-    Zap,
     X,
     Check
 } from 'lucide-react';
@@ -54,9 +50,9 @@ export default function TopNavigation({
 }: TopNavigationProps) {
     const router = useRouter();
     const { zoomIn, zoomOut, fitView } = useReactFlow();
+    const { zoom } = useViewport();
     const { nodes, edges, selectedNodes } = useWorkflowStore();
 
-    const [isDarkTheme, setIsDarkTheme] = useState(true);
     const [showSearch, setShowSearch] = useState(false);
     const [showNotifications, setShowNotifications] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
@@ -77,10 +73,9 @@ export default function TopNavigation({
         fitView({ duration: 200, padding: 0.2 });
     }, [fitView]);
 
-    const handleThemeToggle = () => {
-        setIsDarkTheme(!isDarkTheme);
-        toast.success(`Switched to ${!isDarkTheme ? 'dark' : 'light'} theme`);
-    };
+    // ...
+
+    // ...
 
     const handleSearch = (e: React.FormEvent) => {
         e.preventDefault();
@@ -159,7 +154,7 @@ export default function TopNavigation({
 
     return (
         <>
-            <header className="h-16 bg-[#0a0f1a] border-b border-[#1e293b] flex items-center justify-between px-4 z-50 relative">
+            <header className="h-16 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-b border-border flex items-center justify-between px-4 z-50 relative">
                 {/* Left Section */}
                 <div className="flex items-center gap-4">
                     {/* Logo */}
@@ -168,10 +163,7 @@ export default function TopNavigation({
                             <Zap className="w-5 h-5 text-white" />
                         </div>
                         <div className="flex items-center gap-2">
-                            <span className="font-semibold text-white">Weavy</span>
-                            <span className="px-1.5 py-0.5 text-xs bg-indigo-500/20 text-indigo-400 rounded border border-indigo-500/30">
-                                PRO
-                            </span>
+                            <span className="font-semibold text-foreground">Weavy</span>
                         </div>
                     </div>
 
@@ -180,34 +172,11 @@ export default function TopNavigation({
                         <Button
                             variant="ghost"
                             size="sm"
-                            className="text-gray-400 hover:text-white hover:bg-white/5"
+                            className="text-muted-foreground hover:text-foreground hover:bg-accent ml-25"
                             onClick={() => router.push('/workflows')}
                         >
                             <LayoutDashboard className="w-4 h-4 mr-2" />
                             Dashboard
-                        </Button>
-                        <Button
-                            variant="ghost"
-                            size="sm"
-                            className="text-white bg-white/10"
-                        >
-                            <Wand2 className="w-4 h-4 mr-2" />
-                            Editor Demo
-                        </Button>
-                        <Button
-                            variant="ghost"
-                            size="sm"
-                            className="text-gray-400 hover:text-white hover:bg-white/5"
-                        >
-                            <FileText className="w-4 h-4 mr-2" />
-                            Templates
-                        </Button>
-                        <Button
-                            variant="ghost"
-                            size="sm"
-                            className="text-gray-400 hover:text-white hover:bg-white/5"
-                        >
-                            Feature Roadmap
                         </Button>
                     </nav>
                 </div>
@@ -218,16 +187,16 @@ export default function TopNavigation({
                         <Button
                             variant="ghost"
                             size="icon"
-                            className="text-gray-400 hover:text-white hover:bg-white/5"
+                            className="text-muted-foreground hover:text-foreground hover:bg-accent"
                             onClick={() => router.push('/workflows')}
                         >
                             <ArrowLeft className="h-5 w-5" />
                         </Button>
                         <div className="text-center">
-                            <h1 className="font-semibold text-white text-sm">
+                            <h1 className="font-semibold text-foreground text-sm">
                                 {workflowName || 'Untitled Workflow'}
                             </h1>
-                            <p className="text-xs text-gray-500">
+                            <p className="text-xs text-muted-foreground">
                                 {lastSaved ? `Last saved ${lastSaved}` : 'Auto-save ON'}
                             </p>
                         </div>
@@ -238,26 +207,26 @@ export default function TopNavigation({
                 <div className="flex items-center gap-2">
                     {/* Canvas Controls */}
                     <div className="hidden lg:flex items-center gap-1 mr-2">
-                        <Button variant="ghost" size="icon" className="h-8 w-8 text-gray-400 hover:text-white hover:bg-white/5">
+                        {/* <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground hover:bg-accent">
                             <Undo2 className="w-4 h-4" />
                         </Button>
-                        <Button variant="ghost" size="icon" className="h-8 w-8 text-gray-400 hover:text-white hover:bg-white/5">
+                        <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground hover:bg-accent">
                             <Redo2 className="w-4 h-4" />
-                        </Button>
-                        <div className="w-px h-4 bg-gray-700 mx-1" />
+                        </Button> */}
+                        <div className="w-px h-4 bg-border mx-1" />
                         <Button
                             variant="ghost"
                             size="icon"
-                            className="h-8 w-8 text-gray-400 hover:text-white hover:bg-white/5"
+                            className="h-8 w-8 text-muted-foreground hover:text-foreground hover:bg-accent "
                             onClick={handleZoomOut}
                         >
                             <ZoomOut className="w-4 h-4" />
                         </Button>
-                        <span className="text-xs text-gray-400 min-w-[40px] text-center">100%</span>
+                        <span className="text-xs text-muted-foreground min-w-[40px] text-center">{Math.round(zoom * 100)}%</span>
                         <Button
                             variant="ghost"
                             size="icon"
-                            className="h-8 w-8 text-gray-400 hover:text-white hover:bg-white/5"
+                            className="h-8 w-8 text-muted-foreground hover:text-foreground hover:bg-accent"
                             onClick={handleZoomIn}
                         >
                             <ZoomIn className="w-4 h-4" />
@@ -265,16 +234,16 @@ export default function TopNavigation({
                         <Button
                             variant="ghost"
                             size="icon"
-                            className="h-8 w-8 text-gray-400 hover:text-white hover:bg-white/5"
+                            className="h-8 w-8 text-muted-foreground hover:text-foreground hover:bg-accent"
                             onClick={handleFitView}
                         >
                             <Maximize2 className="w-4 h-4" />
                         </Button>
-                        <div className="w-px h-4 bg-gray-700 mx-1" />
+                        <div className="w-px h-4 bg-border mx-1" />
                         <Button
                             variant="ghost"
                             size="icon"
-                            className="h-8 w-8 text-gray-400 hover:text-white hover:bg-white/5"
+                            className="h-8 w-8 text-muted-foreground hover:text-foreground hover:bg-accent"
                             onClick={onSave}
                             disabled={isSaving}
                         >
@@ -283,7 +252,7 @@ export default function TopNavigation({
                         <Button
                             variant="ghost"
                             size="icon"
-                            className="h-8 w-8 text-gray-400 hover:text-white hover:bg-white/5"
+                            className="h-8 w-8 text-muted-foreground hover:text-foreground hover:bg-accent"
                             onClick={handleExport}
                         >
                             <Download className="w-4 h-4" />
@@ -291,7 +260,7 @@ export default function TopNavigation({
                         <Button
                             variant="ghost"
                             size="icon"
-                            className="h-8 w-8 text-gray-400 hover:text-white hover:bg-white/5"
+                            className="h-8 w-8 text-muted-foreground hover:text-foreground hover:bg-accent"
                             onClick={handleImport}
                         >
                             <Upload className="w-4 h-4" />
@@ -302,31 +271,22 @@ export default function TopNavigation({
                     <Button
                         variant="ghost"
                         size="icon"
-                        className="h-8 w-8 text-gray-400 hover:text-white hover:bg-white/5"
+                        className="h-8 w-8 text-muted-foreground hover:text-foreground hover:bg-accent"
                         onClick={() => setShowSearch(true)}
                     >
                         <Search className="w-4 h-4" />
                     </Button>
-                    <Button
+                    {/* <Button
                         variant="ghost"
                         size="icon"
-                        className="h-8 w-8 text-gray-400 hover:text-white hover:bg-white/5 relative"
+                        className="h-8 w-8 text-muted-foreground hover:text-foreground hover:bg-accent relative"
                         onClick={() => setShowNotifications(!showNotifications)}
                     >
                         <Bell className="w-4 h-4" />
                         {unreadCount > 0 && (
                             <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full" />
                         )}
-                    </Button>
-                    <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-gray-400 hover:text-white hover:bg-white/5"
-                        onClick={handleThemeToggle}
-                    >
-                        {isDarkTheme ? <Moon className="w-4 h-4" /> : <Sun className="w-4 h-4" />}
-                    </Button>
-
+                    </Button> */}
                     {/* Run Button */}
                     <Button
                         onClick={onRun}
@@ -350,30 +310,30 @@ export default function TopNavigation({
 
             {/* Search Modal */}
             {showSearch && (
-                <div className="fixed inset-0 bg-black/50 z-[100] flex items-start justify-center pt-20">
-                    <div className="bg-[#111827] border border-[#1e293b] rounded-lg w-[500px] shadow-2xl">
+                <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-[100] flex items-start justify-center pt-20">
+                    <div className="bg-card border border-border rounded-lg w-[500px] shadow-2xl">
                         <form onSubmit={handleSearch} className="p-4">
                             <div className="flex items-center gap-3">
-                                <Search className="w-5 h-5 text-gray-500" />
+                                <Search className="w-5 h-5 text-muted-foreground" />
                                 <Input
                                     autoFocus
                                     placeholder="Search nodes by name or type..."
                                     value={searchQuery}
                                     onChange={(e) => setSearchQuery(e.target.value)}
-                                    className="flex-1 bg-transparent border-0 text-white placeholder:text-gray-500 focus-visible:ring-0"
+                                    className="flex-1 bg-transparent border-0 text-foreground placeholder:text-muted-foreground focus-visible:ring-0"
                                 />
                                 <Button
                                     type="button"
                                     variant="ghost"
                                     size="icon"
                                     onClick={() => setShowSearch(false)}
-                                    className="text-gray-500 hover:text-white"
+                                    className="text-muted-foreground hover:text-foreground"
                                 >
                                     <X className="w-5 h-5" />
                                 </Button>
                             </div>
                         </form>
-                        <div className="border-t border-[#1e293b] px-4 py-2 text-xs text-gray-500">
+                        <div className="border-t border-border px-4 py-2 text-xs text-muted-foreground">
                             Press Enter to search • Esc to close
                         </div>
                     </div>
@@ -381,47 +341,47 @@ export default function TopNavigation({
             )}
 
             {/* Notifications Panel */}
-            {showNotifications && (
-                <div className="fixed top-16 right-4 w-80 bg-[#111827] border border-[#1e293b] rounded-lg shadow-2xl z-[100]">
-                    <div className="flex items-center justify-between p-4 border-b border-[#1e293b]">
-                        <h3 className="font-semibold text-white">Notifications</h3>
+            {/* {showNotifications && (
+                <div className="fixed top-16 right-4 w-80 bg-card border border-border rounded-lg shadow-2xl z-[100]">
+                    <div className="flex items-center justify-between p-4 border-b border-border">
+                        <h3 className="font-semibold text-foreground">Notifications</h3>
                         <Button
                             variant="ghost"
                             size="icon"
                             onClick={() => setShowNotifications(false)}
-                            className="h-6 w-6 text-gray-500 hover:text-white"
+                            className="h-6 w-6 text-muted-foreground hover:text-foreground"
                         >
                             <X className="w-4 h-4" />
                         </Button>
                     </div>
                     <div className="max-h-80 overflow-y-auto">
                         {notifications.length === 0 ? (
-                            <div className="p-4 text-center text-gray-500 text-sm">
+                            <div className="p-4 text-center text-muted-foreground text-sm">
                                 No notifications
                             </div>
                         ) : (
                             notifications.map((notification) => (
                                 <div
                                     key={notification.id}
-                                    className={`p-4 border-b border-[#1e293b] hover:bg-white/5 cursor-pointer ${!notification.read ? 'bg-indigo-500/5' : ''}`}
+                                    className={`p-4 border-b border-border hover:bg-accent cursor-pointer ${!notification.read ? 'bg-primary/5' : ''}`}
                                 >
                                     <div className="flex items-start gap-3">
-                                        {!notification.read && <div className="w-2 h-2 bg-indigo-500 rounded-full mt-1.5 flex-shrink-0" />}
+                                        {!notification.read && <div className="w-2 h-2 bg-primary rounded-full mt-1.5 flex-shrink-0" />}
                                         <div className="flex-1">
-                                            <p className="text-sm font-medium text-white">{notification.title}</p>
-                                            <p className="text-xs text-gray-400 mt-1">{notification.message}</p>
-                                            <p className="text-xs text-gray-500 mt-2">{notification.time}</p>
+                                            <p className="text-sm font-medium text-foreground">{notification.title}</p>
+                                            <p className="text-xs text-muted-foreground mt-1">{notification.message}</p>
+                                            <p className="text-xs text-muted-foreground mt-2">{notification.time}</p>
                                         </div>
                                     </div>
                                 </div>
                             ))
                         )}
                     </div>
-                    <div className="p-3 border-t border-[#1e293b]">
+                    <div className="p-3 border-t border-border">
                         <Button
                             variant="ghost"
                             size="sm"
-                            className="w-full text-gray-400 hover:text-white"
+                            className="w-full text-muted-foreground hover:text-foreground"
                             onClick={() => toast.success('All notifications marked as read')}
                         >
                             <Check className="w-4 h-4 mr-2" />
@@ -429,7 +389,7 @@ export default function TopNavigation({
                         </Button>
                     </div>
                 </div>
-            )}
+            )} */}
         </>
     );
 }

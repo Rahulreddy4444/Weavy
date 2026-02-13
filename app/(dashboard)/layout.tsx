@@ -14,7 +14,7 @@ export default function DashboardLayout({
         <div className="container mx-auto flex h-16 items-center px-4">
           <Link href="/workflows" className="flex items-center gap-2">
             <Workflow className="h-6 w-6 text-primary" />
-            <span className="text-xl font-bold text-foreground">Weavy Clone</span>
+            <span className="text-xl font-bold text-foreground">Weavy</span>
           </Link>
           <div className="flex-1" />
           <UserButton afterSignOutUrl="/" />

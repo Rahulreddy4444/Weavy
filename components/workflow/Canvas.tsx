@@ -21,6 +21,8 @@ import ConditionNode from './nodes/ConditionNode';
 import LoopNode from './nodes/LoopNode';
 import MergeNode from './nodes/MergeNode';
 import OutputNode from './nodes/OutputNode';
+import TextToImageNode from './nodes/TextToImageNode';
+import TextToVideoNode from './nodes/TextToVideoNode';
 
 const nodeTypes: NodeTypes = {
   textNode: TextNode,
@@ -33,6 +35,8 @@ const nodeTypes: NodeTypes = {
   loopNode: LoopNode,
   mergeNode: MergeNode,
   outputNode: OutputNode,
+  textToImageNode: TextToImageNode,
+  textToVideoNode: TextToVideoNode,
 };
 
 const defaultEdgeOptions = {
@@ -101,6 +105,8 @@ export default function Canvas() {
               case 'uploadVideoNode':
                 return '#10b981';
               case 'llmNode':
+              case 'textToImageNode':
+              case 'textToVideoNode':
                 return '#8b5cf6';
               case 'cropImageNode':
               case 'extractFrameNode':

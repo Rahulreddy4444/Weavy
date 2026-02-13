@@ -111,11 +111,38 @@ export default memo(function LLMNode({ id, data }: NodeProps) {
           </Select>
         </div>
 
+        {/* Dynamic Inputs Control */}
+        <div className="flex items-center justify-between pb-2 border-b border-[#1e293b]">
+          <Label className="text-xs font-medium text-gray-400 uppercase">Input Connections</Label>
+          <div className="flex items-center gap-1">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-6 w-6 text-gray-400 hover:text-white hover:bg-white/5"
+              onClick={removeInput}
+              disabled={numInputs <= 1}
+            >
+              <X className="w-3 h-3" />
+            </Button>
+            <span className="text-xs text-gray-500 font-mono w-4 text-center">{numInputs}</span>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-6 w-6 text-gray-400 hover:text-white hover:bg-white/5"
+              onClick={addInput}
+            >
+              <Plus className="w-3 h-3" />
+            </Button>
+          </div>
+        </div>
+
         {/* System Prompt */}
         <div className="space-y-2">
-          <Label className="text-xs font-medium text-gray-500 uppercase">
-            System Prompt
-            <span className="ml-1 text-xs text-gray-600">(Optional)</span>
+          <Label className="text-xs font-medium text-gray-500 uppercase flex items-center justify-between">
+            <span>System Prompt</span>
+            <span className="text-[10px] text-violet-400 bg-violet-500/10 px-1.5 py-0.5 rounded border border-violet-500/20">
+              Connect to 'System'
+            </span>
           </Label>
           <Textarea
             value={data.systemPrompt || ''}
@@ -127,9 +154,11 @@ export default memo(function LLMNode({ id, data }: NodeProps) {
 
         {/* User Message */}
         <div className="space-y-2">
-          <Label className="text-xs font-medium text-gray-500 uppercase">
-            User Message
-            <span className="ml-1 text-xs text-gray-600">(or connect inputs)</span>
+          <Label className="text-xs font-medium text-gray-500 uppercase flex items-center justify-between">
+            <span>User Message</span>
+            <span className="text-[10px] text-indigo-400 bg-indigo-500/10 px-1.5 py-0.5 rounded border border-indigo-500/20">
+              Connect inputs
+            </span>
           </Label>
           <Textarea
             value={data.userMessage || ''}
