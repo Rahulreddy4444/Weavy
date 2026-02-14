@@ -18,6 +18,11 @@ A full-stack visual workflow builder for creating and executing AI-powered workf
   - Run LLM - Execute AI models (Gemini Pro, Gemini 1.5 Pro/Flash)
   - Crop Image - Image cropping with custom parameters
   - Extract Frame - Extract frames from videos
+  - Text to Image - Generate images from text prompts
+  - Text to Video - Generate videos from text prompts
+  - Condition - Route execution based on logic
+  - Loop - Iterate a specific number of times
+  - Merge - Combine multiple execution paths
 - **Real-time Execution** - Watch your workflows execute in real-time
 - **Workflow History** - Track all workflow runs with detailed results
 - **Auto-save** - Automatic saving every 30 seconds
@@ -287,6 +292,51 @@ Extract a specific frame from a video.
 - Timestamp (% or seconds)
 
 **Outputs:** Extracted Frame URL
+
+### Text to Image
+Generate images using AI models based on text prompts.
+
+**Inputs:**
+- Prompt
+
+**Outputs:** Generated Image URL
+
+### Text to Video
+Generate videos using AI models based on text prompts.
+
+**Inputs:**
+- Prompt
+
+**Outputs:** Generated Video URL
+
+### Condition
+Route workflow execution based on conditional logic (equals, contains, startsWith, etc.).
+
+**Inputs:**
+- Input (any)
+
+**Outputs:** 
+- True (path)
+- False (path)
+
+### Loop
+Iterate a specific number of times with an optional delay.
+
+**Inputs:**
+- Input (any)
+
+**Outputs:** 
+- Output (triggers for each iteration)
+
+### Merge
+Combine multiple execution paths into a single output. Supports 2-5 inputs.
+
+**Inputs:**
+- Input 1
+- Input 2
+- ... (up to 5)
+
+**Outputs:** Merged Output
 
 ## Database Schema
 
