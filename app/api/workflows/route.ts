@@ -15,7 +15,7 @@ const workflowSchema = z.object({
 export async function GET(request: NextRequest) {
   try {
     const { userId } = await auth();
-    
+
     if (!userId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -24,7 +24,7 @@ export async function GET(request: NextRequest) {
     await ensureUserExists(userId);
 
     const workflows = await prisma.workflow.findMany({
-      where: { 
+      where: {
         user: {
           clerkId: userId
         }
@@ -57,7 +57,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const { userId: clerkUserId } = await auth();
-    
+
     if (!clerkUserId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -85,7 +85,7 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
-    
+
     console.error('Error creating workflow:', error);
     return NextResponse.json(
       { error: 'Failed to create workflow' },
@@ -108,7 +108,55 @@ async function ensureUserExists(clerkUserId: string) {
         email: `user-${clerkUserId}@temp.com`, // Temporary email
       },
     });
+
+    // Create the default sample workflow
+    await createSampleWorkflow(user.id);
   }
 
   return user;
+}
+
+async function createSampleWorkflow(userId: string) {
+  const nodes = [
+    {
+      id: 'node-1',
+      type: 'textNode',
+      position: { x: 100, y: 100 },
+      data: { text: 'A futuristic city skyline at night with flying cars and neon lights' }
+    },
+    {
+      id: 'node-2',
+      type: 'textToImageNode',
+      position: { x: 400, y: 100 },
+      data: { prompt: '' }
+    },
+    {
+      id: 'node-3',
+      type: 'cropImageNode',
+      position: { x: 700, y: 100 },
+      data: { xPercent: 10, yPercent: 10, widthPercent: 80, heightPercent: 80 }
+    },
+    {
+      id: 'node-4',
+      type: 'outputNode',
+      position: { x: 1000, y: 100 },
+      data: {}
+    }
+  ];
+
+  const edges = [
+    { id: 'edge-1', source: 'node-1', target: 'node-2', sourceHandle: 'output', targetHandle: 'prompt' },
+    { id: 'edge-2', source: 'node-2', target: 'node-3', sourceHandle: 'output', targetHandle: 'image' },
+    { id: 'edge-3', source: 'node-3', target: 'node-4', sourceHandle: 'output', targetHandle: 'input' }
+  ];
+
+  await prisma.workflow.create({
+    data: {
+      name: 'Sample Workflow: Generative Image',
+      description: 'Generates an image from text and crops it.',
+      nodes: JSON.stringify(nodes),
+      edges: JSON.stringify(edges),
+      userId
+    }
+  });
 }

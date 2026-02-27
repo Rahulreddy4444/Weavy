@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
 import { Sparkles, Zap, Workflow, ArrowRight, Github } from 'lucide-react';
+import HeroCanvas from '@/components/workflow/HeroCanvas';
 
 export default async function HomePage() {
   const { userId } = await auth();
@@ -43,15 +44,15 @@ export default async function HomePage() {
             <Zap className="h-4 w-4 text-primary" />
             <span className="text-sm font-medium text-primary">Powered by AI</span>
           </div>
-          
+
           <h1 className="text-6xl font-bold mb-6 bg-gradient-to-r from-foreground via-foreground to-primary bg-clip-text text-transparent">
             Visual Workflow Builder
             <br />
             for AI Workflows
           </h1>
-          
+
           <p className="text-xl text-muted-foreground max-w-2xl mx-auto mb-8">
-            Create powerful AI workflows with a simple drag-and-drop interface. 
+            Create powerful AI workflows with a simple drag-and-drop interface.
             Connect nodes, run AI models, and automate your creative process.
           </p>
 
@@ -68,6 +69,30 @@ export default async function HomePage() {
                 View on GitHub
               </Button>
             </Link>
+          </div>
+        </div>
+
+        {/* Visual Workflow Preview Section */}
+        <div className="mt-20 relative max-w-5xl mx-auto">
+          <div className="absolute inset-0 bg-gradient-to-r from-primary/30 to-purple-500/30 blur-3xl rounded-full opacity-20 transform -translate-y-1/2" />
+          <div className="relative h-[600px] w-full rounded-2xl border border-border/50 bg-[#0a0f1a]/80 shadow-2xl overflow-hidden backdrop-blur-xl ring-1 ring-white/10">
+            {/* Browser-like window header */}
+            <div className="h-10 w-full border-b border-border/50 bg-black/40 flex items-center px-4 gap-2">
+              <div className="flex gap-1.5">
+                <div className="w-3 h-3 rounded-full bg-red-500/80" />
+                <div className="w-3 h-3 rounded-full bg-yellow-500/80" />
+                <div className="w-3 h-3 rounded-full bg-green-500/80" />
+              </div>
+              <div className="mx-auto flex items-center gap-2 text-xs font-medium text-muted-foreground bg-white/5 px-3 py-1 rounded-md">
+                <Workflow className="w-3 h-3" />
+                Sample Context: Generative Image Pipeline
+              </div>
+            </div>
+
+            {/* The actual Canvas */}
+            <div className="h-[calc(100%-40px)] w-full">
+              <HeroCanvas />
+            </div>
           </div>
         </div>
 
