@@ -14,8 +14,14 @@ export const runLLM = task({
     console.log("Starting LLM execution", { model: payload.model });
 
     try {
-      const geminiModel = genAI.getGenerativeModel({ 
-        model: payload.model || "gemini-pro" 
+      let modelName = payload.model || "gemini-2.5-flash";
+      // Map invalid UI model names to correct Google API model names enabled on this key
+      if (modelName.includes('gemini-1.5') || modelName === 'gemini-pro') {
+        modelName = 'gemini-2.5-flash';
+      }
+
+      const geminiModel = genAI.getGenerativeModel({
+        model: modelName
       });
 
       const parts: any[] = [];
@@ -36,9 +42,9 @@ export const runLLM = task({
           const imageResponse = await fetch(imageUrl);
           const imageBuffer = await imageResponse.arrayBuffer();
           const base64Image = Buffer.from(imageBuffer).toString('base64');
-          
+
           const mimeType = imageResponse.headers.get('content-type') || 'image/jpeg';
-          
+
           parts.push({
             inlineData: {
               data: base64Image,
@@ -54,8 +60,8 @@ export const runLLM = task({
       const response = await result.response;
       const text = response.text();
 
-      console.log("LLM execution completed", { 
-        responseLength: text.length 
+      console.log("LLM execution completed", {
+        responseLength: text.length
       });
 
       return {

@@ -29,7 +29,7 @@ export default memo(function UploadImageNode({ id, data }: NodeProps) {
       }
 
       setUploading(true);
-      
+
       try {
         const formData = new FormData();
         formData.append('file', file);
@@ -39,20 +39,23 @@ export default memo(function UploadImageNode({ id, data }: NodeProps) {
           body: formData,
         });
 
-        if (!response.ok) throw new Error('Upload failed');
+        if (!response.ok) {
+          const errData = await response.json().catch(() => null);
+          throw new Error(errData?.error || 'Upload failed');
+        }
 
         const { url } = await response.json();
-        
+
         updateNodeData(id, {
           imageUrl: url,
           fileName: file.name,
           fileSize: file.size,
         });
-        
+
         toast.success('Image uploaded successfully');
-      } catch (error) {
-        toast.error('Failed to upload image');
-        console.error(error);
+      } catch (error: any) {
+        toast.error(error.message || 'Failed to upload image');
+        console.warn('Upload warning:', error.message);
       } finally {
         setUploading(false);
       }
@@ -95,7 +98,7 @@ export default memo(function UploadImageNode({ id, data }: NodeProps) {
               id={`file-input-${id}`}
               disabled={uploading}
             />
-            
+
             <label htmlFor={`file-input-${id}`}>
               <div className="cursor-pointer group">
                 <div className="border-2 border-dashed border-[#1e293b] rounded-lg p-6 hover:border-emerald-500/50 hover:bg-emerald-500/5 transition-all text-center">
@@ -149,7 +152,7 @@ export default memo(function UploadImageNode({ id, data }: NodeProps) {
               id={`file-input-replace-${id}`}
               disabled={uploading}
             />
-            
+
             <label htmlFor={`file-input-replace-${id}`}>
               <Button
                 type="button"

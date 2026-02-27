@@ -5,6 +5,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { prisma } from '@/lib/prisma';
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import { extractFrame } from '@/trigger/extract-frame-task';
+import { cropImage } from '@/trigger/crop-image-task';
+import { runLLM } from '@/trigger/llm-task';
+import { runs } from '@trigger.dev/sdk/v3';
 
 const genAI = new GoogleGenerativeAI(process.env.GOOGLE_GEMINI_API_KEY || '');
 
@@ -96,40 +100,20 @@ async function executeWorkflow(runId: string, nodes: any[], edges: any[]) {
               throw new Error('Extract Frame node requires a video input');
             }
 
-            // FALLBACK: Generate a placeholder frame since FFmpeg is not available
-            const width = 640;
-            const height = 360;
-            const canvas = createCanvas(width, height);
-            const ctx = canvas.getContext('2d');
+            const frameRun = await extractFrame.trigger({
+              videoUrl: sourceResult.output.videoUrl,
+              timestamp: node.data.timestamp || '0',
+            });
 
-            // Draw placeholder background
-            ctx.fillStyle = '#1e293b';
-            ctx.fillRect(0, 0, width, height);
+            const frameResult = await runs.poll(frameRun.id);
 
-            // Draw text
-            ctx.fillStyle = '#94a3b8';
-            ctx.font = '24px sans-serif';
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            ctx.fillText('Video Frame Extraction', width / 2, height / 2 - 20);
-            ctx.font = '16px sans-serif';
-            ctx.fillText(`Timestamp: ${node.data.timestamp || '0'}`, width / 2, height / 2 + 20);
-            ctx.fillText('(Requires FFmpeg on server)', width / 2, height / 2 + 50);
-
-            // Save placeholder to disk
-            const uploadsDir = path.join(process.cwd(), 'public', 'uploads');
-            if (!fs.existsSync(uploadsDir)) {
-              fs.mkdirSync(uploadsDir, { recursive: true });
+            if (frameResult.status !== 'COMPLETED' || !frameResult.output?.success) {
+              throw new Error('Trigger.dev frame extraction failed');
             }
 
-            const fileName = `frame-${Date.now()}-${Math.random().toString(36).substring(7)}.png`;
-            const filePath = path.join(uploadsDir, fileName);
-            const buffer = canvas.toBuffer('image/png');
-            fs.writeFileSync(filePath, buffer);
-
             output = {
-              extractedFrameUrl: `/uploads/${fileName}`,
-              imageUrl: `/uploads/${fileName}` // Also provide imageUrl for compatibility with other nodes
+              extractedFrameUrl: (frameResult.output as any).extractedFrameUrl,
+              imageUrl: (frameResult.output as any).extractedFrameUrl // Also provide imageUrl for compatibility with other nodes
             };
             break;
           }
@@ -143,45 +127,22 @@ async function executeWorkflow(runId: string, nodes: any[], edges: any[]) {
               throw new Error('Crop node requires an image input');
             }
 
-            const imageUrl = sourceResult.output.imageUrl;
-            const image = await loadImage(imageUrl);
+            const cropRun = await cropImage.trigger({
+              imageUrl: sourceResult.output.imageUrl,
+              xPercent: node.data.xPercent || 0,
+              yPercent: node.data.yPercent || 0,
+              widthPercent: node.data.widthPercent || 100,
+              heightPercent: node.data.heightPercent || 100,
+            });
 
-            // Calculate crop dimensions
-            // node.data stores percentages: xPercent, yPercent, widthPercent, heightPercent
-            const width = image.width;
-            const height = image.height;
+            const cropResult = await runs.poll(cropRun.id);
 
-            const x = Math.floor((node.data.xPercent || 0) / 100 * width);
-            const y = Math.floor((node.data.yPercent || 0) / 100 * height);
-            const w = Math.floor((node.data.widthPercent || 100) / 100 * width);
-            const h = Math.floor((node.data.heightPercent || 100) / 100 * height);
-
-            // Validate bounds to prevent canvas errors
-            const cropX = Math.max(0, Math.min(x, width));
-            const cropY = Math.max(0, Math.min(y, height));
-            const cropW = Math.max(1, Math.min(w, width - cropX));
-            const cropH = Math.max(1, Math.min(h, height - cropY));
-
-            const canvas = createCanvas(cropW, cropH);
-            const ctx = canvas.getContext('2d');
-
-            ctx.drawImage(image, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
-
-            // SAVE TO DISK INSTEAD OF BASE64
-            const uploadsDir = path.join(process.cwd(), 'public', 'uploads');
-            if (!fs.existsSync(uploadsDir)) {
-              fs.mkdirSync(uploadsDir, { recursive: true });
+            if (cropResult.status !== 'COMPLETED' || !cropResult.output?.success) {
+              throw new Error('Trigger.dev image crop failed');
             }
 
-            const fileName = `crop-${Date.now()}-${Math.random().toString(36).substring(7)}.png`;
-            const filePath = path.join(uploadsDir, fileName);
-            const buffer = canvas.toBuffer('image/png');
-            fs.writeFileSync(filePath, buffer);
-
             output = {
-              imageUrl: `/uploads/${fileName}`,
-              width: cropW,
-              height: cropH
+              imageUrl: (cropResult.output as any).croppedUrl,
             };
             break;
           }
@@ -246,128 +207,21 @@ async function executeWorkflow(runId: string, nodes: any[], edges: any[]) {
             // System prompt priority: Connected Input > Manual Input
             const systemPrompt = systemPromptInput || node.data.systemPrompt || '';
 
-            let responseText = '';
+            const llmRun = await runLLM.trigger({
+              model: selectedModel,
+              systemPrompt: systemPrompt,
+              userMessage: mergedMessage,
+              images: inputImage ? [inputImage.url] : undefined,
+            });
 
-            // ✅ GEMINI MODELS
-            if (selectedModel.startsWith('gemini')) {
-              // Prepare the model config. Note: System instructions are supported in 1.5 models.
-              // If using an older model like gemini-pro, systemInstruction might cause issues, 
-              // but we default to 1.5-flash which supports it.
-              const modelConfig: any = { model: selectedModel };
-              if (systemPrompt) {
-                modelConfig.systemInstruction = systemPrompt;
-              }
+            const llmResult = await runs.poll(llmRun.id);
 
-              const model = genAI.getGenerativeModel(modelConfig);
-
-              const promptParts: any[] = [mergedMessage];
-
-              // Add image if available
-              if (inputImage && fs.existsSync(inputImage.path)) {
-                const imageBuffer = fs.readFileSync(inputImage.path);
-                const imageBase64 = imageBuffer.toString('base64');
-                promptParts.push({
-                  inlineData: {
-                    data: imageBase64,
-                    mimeType: inputImage.mimeType
-                  }
-                });
-              }
-
-              const result = await model.generateContent(promptParts);
-              responseText = result.response.text();
-            }
-
-            // ✅ OPENAI GPT MODELS
-            else if (selectedModel.startsWith('gpt')) {
-              if (!process.env.OPENAI_API_KEY) {
-                throw new Error('OpenAI API key not set in environment variables');
-              }
-
-              const messages: any[] = [
-                { role: 'system', content: systemPrompt || 'You are a helpful assistant.' },
-                {
-                  role: 'user',
-                  content: inputImage ? [
-                    { type: 'text', text: mergedMessage },
-                    {
-                      type: 'image_url',
-                      image_url: {
-                        // OpenAI needs a public URL or base64 data url. 
-                        // Since we are running locally, we need to pass base64 data url.
-                        url: `data:${inputImage.mimeType};base64,${fs.readFileSync(inputImage.path).toString('base64')}`
-                      }
-                    }
-                  ] : mergedMessage
-                }
-              ];
-
-              const response = await fetch('https://api.openai.com/v1/chat/completions', {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
-                },
-                body: JSON.stringify({
-                  model: selectedModel,
-                  messages: messages,
-                }),
-              });
-
-              if (!response.ok) {
-                const err = await response.json();
-                throw new Error(err.error?.message || 'OpenAI API error');
-              }
-
-              const data = await response.json();
-              responseText = data.choices[0].message.content;
-            }
-
-            // ✅ ANTHROPIC MODELS
-            else if (selectedModel.startsWith('claude')) {
-              if (!process.env.ANTHROPIC_API_KEY) {
-                throw new Error('Anthropic API key not set');
-              }
-
-              // Construct content array
-              const content: any[] = [{ type: 'text', text: mergedMessage }];
-              if (inputImage) {
-                content.push({
-                  type: 'image',
-                  source: {
-                    type: 'base64',
-                    media_type: inputImage.mimeType,
-                    data: fs.readFileSync(inputImage.path).toString('base64')
-                  }
-                });
-              }
-
-              const response = await fetch('https://api.anthropic.com/v1/messages', {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  'x-api-key': process.env.ANTHROPIC_API_KEY,
-                  'anthropic-version': '2023-06-01',
-                },
-                body: JSON.stringify({
-                  model: selectedModel,
-                  max_tokens: 1024,
-                  messages: [{ role: 'user', content }],
-                  system: systemPrompt,
-                }),
-              });
-
-              if (!response.ok) {
-                const err = await response.json();
-                throw new Error(err.error?.message || 'Anthropic API error');
-              }
-
-              const data = await response.json();
-              responseText = data.content[0].text;
+            if (llmResult.status !== 'COMPLETED' || !llmResult.output?.success) {
+              throw new Error('Trigger.dev LLM task failed');
             }
 
             output = {
-              response: responseText,
+              response: (llmResult.output as any).response,
               // Pass through the image URL so the output node can display it
               ...(inputImage ? { imageUrl: inputImage.url } : {})
             };

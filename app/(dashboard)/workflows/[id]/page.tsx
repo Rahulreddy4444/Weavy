@@ -137,6 +137,13 @@ export default function WorkflowPage({ params }: { params: Promise<{ id: string 
 
       try {
         const response = await fetch(`/api/runs/${runId}`);
+
+        if (!response.ok) {
+          const text = await response.text();
+          console.error(`Runs API error (${response.status}):`, text);
+          throw new Error('API returned non-OK status');
+        }
+
         const data = await response.json();
         const run = data.run;
 

@@ -38,7 +38,10 @@ export default memo(function UploadVideoNode({ id, data }: NodeProps) {
           body: formData,
         });
 
-        if (!response.ok) throw new Error('Upload failed');
+        if (!response.ok) {
+          const errData = await response.json().catch(() => null);
+          throw new Error(errData?.error || 'Upload failed');
+        }
 
         const { url } = await response.json();
 
@@ -49,9 +52,9 @@ export default memo(function UploadVideoNode({ id, data }: NodeProps) {
         });
 
         toast.success('Video uploaded successfully');
-      } catch (error) {
-        toast.error('Failed to upload video');
-        console.error(error);
+      } catch (error: any) {
+        toast.error(error.message || 'Failed to upload video');
+        console.warn('Upload warning:', error.message);
       } finally {
         setUploading(false);
       }

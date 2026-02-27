@@ -104,11 +104,11 @@ A full-stack visual workflow builder for creating and executing AI-powered workf
    OPENAI_API_KEY=your_openai_key_here
    ANTHROPIC_API_KEY=your_anthropic_key_here
 
-   # Trigger.dev (Optional)
+   # Trigger.dev 
    TRIGGER_PROJECT_ID=proj_xxxxx
    TRIGGER_SECRET_KEY=tr_dev_xxxxx
 
-   # Transloadit (Optional - for production)
+   # Transloadit
    TRANSLOADIT_KEY=xxxxx
    TRANSLOADIT_SECRET=xxxxx
    ```
