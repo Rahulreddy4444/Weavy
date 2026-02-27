@@ -10,6 +10,8 @@ import { cropImage } from '@/trigger/crop-image-task';
 import { runLLM } from '@/trigger/llm-task';
 import { runs } from '@trigger.dev/sdk/v3';
 
+export const maxDuration = 60; // Allow maximum execution time on Vercel Hobby
+
 const genAI = new GoogleGenerativeAI(process.env.GOOGLE_GEMINI_API_KEY || '');
 
 export async function POST(
@@ -46,10 +48,14 @@ export async function POST(
       },
     });
 
-    // Background execution
-    executeWorkflow(workflowRun.id, nodes, edges).catch(console.error);
+    // Execute synchronously to prevent Vercel from killing the background process
+    await executeWorkflow(workflowRun.id, nodes, edges);
 
-    return NextResponse.json({ runId: workflowRun.id, status: 'RUNNING' });
+    const updatedRun = await prisma.workflowRun.findUnique({
+      where: { id: workflowRun.id }
+    });
+
+    return NextResponse.json({ runId: workflowRun.id, status: updatedRun?.status || 'COMPLETED' });
   } catch (error) {
     console.error('Workflow execution error:', error);
     return NextResponse.json({ error: 'Execution failed' }, { status: 500 });
