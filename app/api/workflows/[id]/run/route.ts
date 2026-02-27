@@ -62,6 +62,16 @@ export async function POST(
   }
 }
 
+// Helper to poll with timeout so Vercel doesn't hang indefinitely 
+// if Trigger.dev tasks are not deployed to production.
+async function pollWithTimeout(runId: string, timeoutMs: number = 45000) {
+  const pollPromise = runs.poll(runId);
+  const timeoutPromise = new Promise((_, reject) =>
+    setTimeout(() => reject(new Error('Trigger.dev task timed out. Make sure you run `npx trigger.dev deploy` to deploy tasks to production!')), timeoutMs)
+  );
+  return Promise.race([pollPromise, timeoutPromise]) as Promise<any>;
+}
+
 async function executeWorkflow(runId: string, nodes: any[], edges: any[]) {
   const nodeResults: any[] = [];
   const startTime = Date.now();
@@ -111,7 +121,7 @@ async function executeWorkflow(runId: string, nodes: any[], edges: any[]) {
               timestamp: node.data.timestamp || '0',
             });
 
-            const frameResult = await runs.poll(frameRun.id);
+            const frameResult = await pollWithTimeout(frameRun.id);
 
             if (frameResult.status !== 'COMPLETED' || !frameResult.output?.success) {
               throw new Error('Trigger.dev frame extraction failed');
@@ -141,7 +151,7 @@ async function executeWorkflow(runId: string, nodes: any[], edges: any[]) {
               heightPercent: node.data.heightPercent || 100,
             });
 
-            const cropResult = await runs.poll(cropRun.id);
+            const cropResult = await pollWithTimeout(cropRun.id);
 
             if (cropResult.status !== 'COMPLETED' || !cropResult.output?.success) {
               throw new Error('Trigger.dev image crop failed');
@@ -220,7 +230,7 @@ async function executeWorkflow(runId: string, nodes: any[], edges: any[]) {
               images: inputImage ? [inputImage.url] : undefined,
             });
 
-            const llmResult = await runs.poll(llmRun.id);
+            const llmResult = await pollWithTimeout(llmRun.id);
 
             if (llmResult.status !== 'COMPLETED' || !llmResult.output?.success) {
               throw new Error('Trigger.dev LLM task failed');
